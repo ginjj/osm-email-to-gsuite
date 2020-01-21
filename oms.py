@@ -5,7 +5,7 @@
 #  POST https://www.onlinescoutmanager.co.uk/api.php?action=getSectionConfig
 #  POST https://www.onlinescoutmanager.co.uk/api.php?action=getTerms
 #  POST https://www.onlinescoutmanager.co.uk/api.php?action=getNotepads
-#   
+
 
 
 
@@ -13,19 +13,21 @@
 import os
 import requests #  https://2.python-requests.org//en/latest/user/quickstart/#json-response-content
 import urllib.parse
+import yaml
 from pprint import pprint #  Pretty print
 
 # Global variables
 # Attempt to get API credentials fromm environment vaiables
-try:
-    api_auth_values = {'apiid': os.environ.get('OSM_API_ID'),
-                      'token': os.environ.get('OSM_API_TOKEN'), 
-                      'userid': os.environ.get('OSM_API_USERID'),
-                      'secret': os.environ.get('OSM_API_SECRET')}
-except:
-    print("Error getting API keys and credentials from Environment variables")
-    sys.exit(1)
 
+with open("config.yaml", 'r') as stream:
+    try:
+        dictionary = yaml.safe_load(stream)
+    except yaml.YAMLError as exc:
+        print(exc)
+
+api_auth_values = dictionary['osm-api'] # Dict
+base_url = dictionary['base-url']
+section_emails = dictionary['sections'] # List of dicts
 
 def main():
     sections = get_sections()
@@ -84,7 +86,6 @@ def get_members(section, term):   #https://www.onlinescoutmanager.co.uk/ext/memb
 
 # OSM API query via GET method
 def osm_get(url_path, values = None):
-    base_url = 'https://www.onlinescoutmanager.co.uk/'
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     try:
         response = requests.post(base_url + url_path, data=auth, headers=headers)
