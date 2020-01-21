@@ -28,6 +28,7 @@ def main():
     pprint(sections)
     pprint(terms)
     pprint(members)
+    
 
 
 def get_sections():     # Get sections
