@@ -4,31 +4,60 @@ import urllib.parse
 import yaml
 from pprint import pprint 
 
-# Global variables from config file
-with open("config.yaml", 'r') as stream:
-    try:
-        dictionary = yaml.safe_load(stream)
-    except yaml.YAMLError as exc:
-        print(exc)
-
-api_auth_values = dictionary['osm-api']
-base_url = dictionary['base-url']
-section_emails = dictionary['sections']
-
 def main():
+    get_config()
+    print_sections(section_emails, "Sections found in config file:", "id", "email")
+     
     sections = get_sections()
+    print_sections(sections, "Sections found in OSM:", "sectionid", "sectionname")
+        
     terms = get_terms(sections)
+    # Add terms to sections list (both are in the same order).  
     for i in range(len(sections)):
         if sections[i]['sectionid'] == terms[i]['sectionid']:
             sections[i].update(terms[i])
+       
+    valid_sections = [s for s in sections if s['sectionid'] in {x['id'] for x in section_emails}]
+    print_sections(valid_sections, "Sections in both OSM and config file and term start date:", "sectionid", "sectionname", "startdate")
 
-    members = get_members(sections[0]['sectionid'], sections[0]['termid'])
-    
-    # Debug print data
-    pprint(sections)
-    pprint(terms)
-    pprint(members)
-    
+    members = get_members(valid_sections[0]['sectionid'], valid_sections[0]['termid'])
+
+
+
+def print_sections(lst, title, key_1, key_2, key_3 = None):
+    len_value_1 = max(len(max([d[key_1] for d in lst], key=len)),len(key_1))
+    len_value_2 = max(len(max([d[key_2] for d in lst], key=len)),len(key_2))
+    if key_3:
+        len_value_3 = max(len(max([d[key_3] for d in lst], key=len)),len(key_2))
+
+    print()
+    print(title, len(lst))
+    print(key_1.ljust(len_value_1)," ",
+          key_2.ljust(len_value_2)," ",
+          key_3.ljust(len_value_3) if key_3 else "")
+    print("-" * len_value_1," ",
+          "-" * len_value_2," ",
+          "-" * len_value_3 if key_3 else "") 
+    for dic in lst:
+        print(dic[key_1].ljust(len_value_1)," ",
+              dic[key_2].ljust(len_value_2)," ",
+              (dic[key_3].ljust(len_value_3)) if key_3 else "")
+
+
+def get_config():
+    global api_auth_values
+    global base_url
+    global section_emails
+
+    with open("config.yaml", 'r') as stream:
+        try:
+            dictionary = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+
+    api_auth_values = dictionary['osm-api']
+    base_url = dictionary['base-url']
+    section_emails = dictionary['sections']    
 
 
 def get_sections():     # Get sections
