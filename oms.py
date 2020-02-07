@@ -7,6 +7,9 @@ import subprocess
 from datetime import date
 from pprint import pprint 
 
+gam_working_directory ='C:\GAMWork'
+dry_run = False # Set dry_run flag to print GAM commands without executing
+
 
 def main():
     get_config()
@@ -27,18 +30,18 @@ def main():
 
     for section in valid_sections:
         members = get_members(section['sectionid'], section['termid'])
-
         leaders, young_leaders, parents = (set() for i in range(3))
-
+        
         for member in members:
             age = age_today(member['date_of_birth'])
-            if member['patrol_and_role'] == 'Normal':
+            if member['patrol'] == 'Leaders':
+                if age > 18:
+                    leaders.add(member['email'])
+                elif age <= 18:
+                    young_leaders.add(member['email'])    
+            else:
                 parents.add(member['email'])
-            elif age > 18:
-                leaders.add(member['email'])
-            elif age <= 18:
-                young_leaders.add(member['email'])    
-
+        
         for s in section_emails:
             if s['id'] == section['sectionid']:
                 section_email = s['email']
@@ -58,16 +61,19 @@ def age_today(iso_dob):
 
 def gam_sync_group(group_name, email_address_set):
     # GAMADV-XTD3 setup for VS Code shell requires the follwing environment variables to be added to settings.json
-    # 'GAMCFGDIR': 'C:\\GAMConfig', 'PATH': 'C:\\GAMADV-XTD3\\'
+    # 'GAMCFGDIR': 'C:\\GAMConfig', 'PATH': 'C:\\GAMADV-XTD3\\' and working directory 
     # see https://github.com/taers232c/GAMADV-XTD3/wiki/How-to-Install-Advanced-GAM   
     # usage 'gam update group group_name sync 'email1 email2 ...'
     gam_command = 'gam update group ' + group_name + ' sync "' + ' '.join(email_address_set) +'"'
     print('Synchronising', group_name, 'group with', len(email_address_set), 'email addresses from OSM')
-    try:
-        subprocess.run(gam_command, cwd='C:\GAMWork', check=True)
-    except subprocess.CalledProcessError as exc:                                                                                                   
-        print('GAMADV-XTD3 error code:', exc.returncode, exc.output)
-        sys.exit('Error when running sub-process GAMADV-XTD3 command')
+    if not dry_run:
+        try:
+            subprocess.run(gam_command, cwd=gam_working_directory, check=True)
+        except subprocess.CalledProcessError as exc:                                                                                                   
+            print('GAMADV-XTD3 error code:', exc.returncode, exc.output)
+            sys.exit('Error when running sub-process GAMADV-XTD3 command')
+    else:
+        print("DRYRUN:",gam_command)
     print('Sucessfully completed synchronising group')
 
 
@@ -136,6 +142,7 @@ def get_members(section, term):    # Get members for a given section and term
     #pprint(members_data['data'])
     members=[]
     for member in members_data['data']:
+        #print(members_data['data'][member]['patrol'].ljust(20),members_data['data'][member]['patrol_and_role'])
         for custom_section in ['1','2']:
             custom_section_dict = members_data['data'][member]['custom_data'][custom_section]
             for email_field in ['12','14']:
@@ -164,17 +171,6 @@ def osm_post(url_path, values):
         return None
     return response.json()
 
-'''
-# OSM API query via GET method
-def osm_get(url_path, values = None):
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    try:
-        response = requests.post(base_url + url_path, data=api_auth_values, headers=headers)
-        response.raise_for_status()
-    except requests.RequestException:
-        print('Error with OSM GET method')
-        return None
-    return response.json() '''
 
 if __name__ == '__main__':
     main()
