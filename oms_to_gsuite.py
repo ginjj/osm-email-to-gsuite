@@ -83,6 +83,5 @@ def get_email_config():
             print(exc)
     section_emails = dictionary['sections']    
 
-
 if __name__ == '__main__':
     main()
