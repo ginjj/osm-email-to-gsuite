@@ -1,0 +1,9 @@
+# Online Scout Manager URL  
+base-url  : https://www.onlinescoutmanager.co.uk/
+
+# Online Scout Manager API
+osm-api:
+  apiid   : "999"
+  token   : dfsdf6s78df7s5f8asdf78asd6f78sd6
+  userid  : "123456"
+  secret  : sd87gsdfgsdgg68dfg78asd6g78h5dha

@@ -1,0 +1,14 @@
+# Online Scout Manager Sections and email group name
+sections:
+   - id    : "12137"
+     email : tom
+   - id    : "12049"
+     email : dick
+   - id    : "818"
+     email : harry
+   - id    : "12783"
+     email : george
+   - id    : "2303"
+     email : william
+   - id    : "2302"
+     email : archie
