@@ -1,13 +1,9 @@
-import os
 import sys
 import yaml
-import subprocess
 from datetime import date
 from pprint import pprint 
 from osm_api import osm_calls
-
-gam_working_directory ='C:\GAMWork'
-dry_run = False # Set dry_run flag to print GAM commands without executing
+from gsuite_sync import gam_groups
 
 
 def main():
@@ -47,33 +43,15 @@ def main():
                 break
 
         #update groups
-        gam_sync_group(section_email + 'leaders', leaders)
-        gam_sync_group(section_email + 'youngleaders', young_leaders)
-        gam_sync_group(section_email + 'parents', parents)
+        gam_groups.gam_sync_group(section_email + 'leaders', leaders)
+        gam_groups.gam_sync_group(section_email + 'youngleaders', young_leaders)
+        gam_groups.gam_sync_group(section_email + 'parents', parents)
 
 
 def age_today(iso_dob):
      born = date.fromisoformat(iso_dob)
      today = date.today()
      return(today.year - born.year - ((today.month, today.day) < (born.month, born.day)))
-
-
-def gam_sync_group(group_name, email_address_set):
-    # GAMADV-XTD3 setup for VS Code shell requires the follwing environment variables to be added to settings.json
-    # 'GAMCFGDIR': 'C:\\GAMConfig', 'PATH': 'C:\\GAMADV-XTD3\\' and working directory 
-    # see https://github.com/taers232c/GAMADV-XTD3/wiki/How-to-Install-Advanced-GAM   
-    # usage 'gam update group group_name sync 'email1 email2 ...'
-    gam_command = 'gam update group ' + group_name + ' sync "' + ' '.join(email_address_set) +'"'
-    print('Synchronising', group_name, 'group with', len(email_address_set), 'email addresses from OSM')
-    if not dry_run:
-        try:
-            subprocess.run(gam_command, cwd=gam_working_directory, check=True)
-        except subprocess.CalledProcessError as exc:                                                                                                   
-            print('GAMADV-XTD3 error code:', exc.returncode, exc.output)
-            sys.exit('Error when running sub-process GAMADV-XTD3 command')
-    else:
-        print("DRYRUN:",gam_command)
-    print('Sucessfully completed synchronising group')
 
 
 def print_sections(lst, title, key_1, key_2, key_3 = None):
