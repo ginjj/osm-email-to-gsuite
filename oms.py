@@ -1,22 +1,21 @@
 import os
 import sys
-import requests #https://2.python-requests.org//en/latest/user/quickstart/#json-response-content
-import re
 import yaml
 import subprocess
 from datetime import date
 from pprint import pprint 
+from osm_api import osm_calls
 
 gam_working_directory ='C:\GAMWork'
 dry_run = False # Set dry_run flag to print GAM commands without executing
 
 
 def main():
-    get_config()
+    get_email_config()
     print_sections(section_emails, 'Sections found in config file:', 'id', 'email')
-    sections = get_sections()
+    sections = osm_calls.get_sections()
     print_sections(sections, 'Sections found in OSM:', 'sectionid', 'sectionname')
-    terms = get_terms(sections)
+    terms = osm_calls.get_terms(sections)
     # Add terms to sections list (both are in the same order).  
     for i in range(len(sections)):
         if sections[i]['sectionid'] == terms[i]['sectionid']:
@@ -29,7 +28,7 @@ def main():
     print_sections(valid_sections, 'Sections in both OSM and config file with current term start date:', 'sectionid', 'sectionname', 'startdate')
 
     for section in valid_sections:
-        members = get_members(section['sectionid'], section['termid'])
+        members = osm_calls.get_members(section['sectionid'], section['termid'])
         leaders, young_leaders, parents = (set() for i in range(3))
         
         for member in members:
@@ -97,79 +96,14 @@ def print_sections(lst, title, key_1, key_2, key_3 = None):
               dic[key_3].ljust(len_value_3) if key_3 else '')
 
 
-def get_config():
-    global api_auth_values
-    global base_url
+def get_email_config():
     global section_emails
-    with open('config.yaml', 'r') as stream:
+    with open('email_config.yaml', 'r') as stream:
         try:
             dictionary = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             print(exc)
-    api_auth_values = dictionary['osm-api']
-    base_url = dictionary['base-url']
     section_emails = dictionary['sections']    
-
-
-def get_sections():     # Get sections
-    url_path = 'api.php?action=getUserRoles'
-    user_roles_data = osm_post(url_path, api_auth_values)
-    sections = []
-    for section in user_roles_data:
-        section_dict = { key: section[key] for key in ('sectionid', 'sectionname', 'section')}
-        sections.append(section_dict)
-    return sections
-
-
-def get_terms(sections):    # Get latest started (i.e. 'past') term
-    url_path = 'api.php?action=getTerms'
-    terms_data = osm_post(url_path, api_auth_values)
-    terms = []    
-    for section in sections:
-        started_terms = [n for n in terms_data[section['sectionid']] if n['past'] == True]
-        current_term = max(started_terms, key=lambda x:x['startdate'])
-        term_items = {key: current_term[key] for key in ('sectionid','termid', 'name', 'startdate', 'enddate')}
-        terms.append(term_items)
-    return terms
-
-
-def get_members(section, term):    # Get members for a given section and term
-    values = {'section_id': section, 'term_id': term}
-    values.update(api_auth_values)
-    url_path = 'ext/members/contact/grid/?action=getMembers'
-    email_regex = re.compile(r'(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)')  
-    members_data = osm_post(url_path, values)
-    #pprint(members_data['data'])
-    members=[]
-    for member in members_data['data']:
-        #print(members_data['data'][member]['patrol'].ljust(20),members_data['data'][member]['patrol_and_role'])
-        for custom_section in ['1','2']:
-            custom_section_dict = members_data['data'][member]['custom_data'][custom_section]
-            for email_field in ['12','14']:
-                if email_regex.match(custom_section_dict[email_field]):
-                    member_dict = { key: members_data['data'][member][key] for key in ('age_years', 'date_of_birth', 'first_name', 'last_name', 'member_id', 'patrol', 'patrol_and_role', 'section_id')}
-                    member_dict.update({
-                        'email_first_name':custom_section_dict['2'],
-                        'email_last_name':custom_section_dict['3'],
-                        'email':custom_section_dict[email_field]
-                    })
-                    members.append(member_dict)
-                elif custom_section_dict[email_field] != '':
-                    print('WARNING! Rejected email:', custom_section_dict[email_field]) 
-    return members
-
-
-# OSM API query via POST method
-def osm_post(url_path, values):
-    base_url = 'https://www.onlinescoutmanager.co.uk/'
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    try:
-        response = requests.post(base_url + url_path, data=values, headers=headers)
-        response.raise_for_status()
-    except requests.RequestException:
-        print('Error with OSM POST method')
-        return None
-    return response.json()
 
 
 if __name__ == '__main__':

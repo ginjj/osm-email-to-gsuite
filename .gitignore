@@ -1,1 +1,7 @@
-config.yaml
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# User Configuration files
+osm_config.yaml
+email_config.yaml
