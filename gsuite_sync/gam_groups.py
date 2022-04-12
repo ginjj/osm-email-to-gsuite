@@ -19,4 +19,4 @@ def gam_sync_group(group_name, email_address_set):
             sys.exit('Error when running sub-process GAMADV-XTD3 command')
     else:
         print("DRYRUN:",gam_command)
-    print('Sucessfully completed synchronising group')
+    print('Sucsessfully completed synchronising group\n')

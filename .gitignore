@@ -2,6 +2,18 @@
 __pycache__/
 *.py[cod]
 
+.vscode/*
+
+*.xlsx
+*.csv
+
+# Output directory
+output/*
+!output/readme.txt
+
+# CAF Bank transaction export
+!TEMPLATE-caf_export.csv
+
 # User Configuration files
 osm_config.yaml
 email_config.yaml
