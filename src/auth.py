@@ -43,12 +43,32 @@ async def get_access_token(client, redirect_uri, code):
 async def get_user_info(client, token):
     """Get user information from Google."""
     try:
-        user_id, user_email = await client.get_id_email(token)
+        # The token is an OAuth2Token object with access_token, id_token, etc.
+        # We need to pass it correctly to get_id_email
+        user_id, user_email = await client.get_id_email(token["access_token"])
         return user_id, user_email
     except Exception as e:
+        # Fallback: decode the id_token JWT to get email
+        import base64
+        import json
+        try:
+            # Get id_token from the OAuth2Token object
+            id_token = token.get("id_token")
+            if id_token:
+                # Decode JWT (format: header.payload.signature)
+                payload = id_token.split('.')[1]
+                # Add padding if needed
+                payload += '=' * (4 - len(payload) % 4)
+                decoded = base64.urlsafe_b64decode(payload)
+                token_data = json.loads(decoded)
+                user_email = token_data.get("email")
+                user_id = token_data.get("sub")
+                if user_email and user_id:
+                    return user_id, user_email
+        except Exception as decode_error:
+            st.error(f"Failed to decode id_token: {decode_error}")
+        
         st.error(f"Error retrieving user info: {e}")
-        st.error(f"Token type: {type(token)}")
-        st.error(f"Token: {token}")
         raise
 
 
