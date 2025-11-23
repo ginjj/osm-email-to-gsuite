@@ -17,13 +17,16 @@ def _load_config():
     if _api_auth_values is not None:
         return
     
-    # Try to use cloud config first if in cloud environment
-    if os.getenv('USE_CLOUD_CONFIG') == 'true':
+    # Check if we're in cloud environment
+    use_cloud = os.getenv('USE_CLOUD_CONFIG') == 'true'
+    
+    if use_cloud:
+        # Use cloud config (Secret Manager)
         from google.cloud import secretmanager
         project_id = os.getenv('GCP_PROJECT_ID')
         
         if not project_id:
-            raise ValueError("GCP_PROJECT_ID environment variable not set")
+            raise ValueError("GCP_PROJECT_ID environment variable not set but USE_CLOUD_CONFIG=true")
         
         print(f"Loading OSM config from Secret Manager (project: {project_id})")
         client = secretmanager.SecretManagerServiceClient()
@@ -39,17 +42,25 @@ def _load_config():
         except Exception as e:
             print(f"ERROR loading from Secret Manager: {e}")
             raise
-    
-    # Fall back to local file (development mode)
-    print("Loading OSM config from local file")
-    with open('config/osm_config.yaml', 'r') as stream:
-        try:
-            dictionary = yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            print(exc)
-            raise
-    _api_auth_values = dictionary['osm-api']
-    _base_url = dictionary['base-url']
+    else:
+        # Use local file (development mode)
+        print("Loading OSM config from local file")
+        config_path = 'config/osm_config.yaml'
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(
+                f"Config file not found: {config_path}\n"
+                f"Set USE_CLOUD_CONFIG=true to use cloud configuration, "
+                f"or ensure config/osm_config.yaml exists for local development."
+            )
+        
+        with open(config_path, 'r') as stream:
+            try:
+                dictionary = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+                raise
+        _api_auth_values = dictionary['osm-api']
+        _base_url = dictionary['base-url']
 
 # Initialize config on module import
 _load_config()
