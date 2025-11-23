@@ -93,7 +93,22 @@ class GoogleGroupsManager:
             # The service account needs the "Service Account Token Creator" role on itself
             if hasattr(creds, 'service_account_email'):
                 sa_email = creds.service_account_email
-                print(f'Service account: {sa_email}')
+                
+                # Compute Engine credentials return "default" for service_account_email
+                # We need to get the actual email from the metadata server
+                if sa_email == 'default':
+                    print('Service account email is "default", fetching from metadata server...')
+                    import requests as req
+                    metadata_url = 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email'
+                    headers = {'Metadata-Flavor': 'Google'}
+                    response = req.get(metadata_url, headers=headers)
+                    if response.status_code == 200:
+                        sa_email = response.text
+                        print(f'Got service account email from metadata: {sa_email}')
+                    else:
+                        raise ValueError(f'Failed to get service account email from metadata: {response.text}')
+                else:
+                    print(f'Service account: {sa_email}')
                 
                 # Refresh credentials to ensure we have a valid token
                 if not creds.valid:
