@@ -120,7 +120,10 @@ class GoogleGroupsManager:
                 ).execute()
                 
                 for member in result.get('members', []):
-                    members.add(member['email'].lower())
+                    email = member['email'].lower()
+                    # Normalize googlemail.com to gmail.com to match what we send
+                    email = email.replace('@googlemail.com', '@gmail.com')
+                    members.add(email)
                 
                 page_token = result.get('nextPageToken')
                 if not page_token:
