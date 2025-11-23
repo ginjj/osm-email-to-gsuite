@@ -1,0 +1,48 @@
+# Configuration directory
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Google Cloud
+.gcloudignore
+app.yaml
+
+# Credentials and secrets
+google_credentials.json
+service-account-key.json
+token.pickle
+osm_config.yaml
+google_config.yaml
+email_config.yaml
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Output files
+output/
+*.csv
+*.log
+
+# GAM legacy
+C:\GAMWork/
+C:\GAMConfig/
