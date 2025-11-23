@@ -19,25 +19,35 @@ def _load_config():
     
     # Try to use cloud config first if in cloud environment
     if os.getenv('USE_CLOUD_CONFIG') == 'true':
+        from google.cloud import secretmanager
+        project_id = os.getenv('GCP_PROJECT_ID')
+        
+        if not project_id:
+            raise ValueError("GCP_PROJECT_ID environment variable not set")
+        
+        print(f"Loading OSM config from Secret Manager (project: {project_id})")
+        client = secretmanager.SecretManagerServiceClient()
+        secret_name = f"projects/{project_id}/secrets/osm-config/versions/latest"
+        
         try:
-            from google.cloud import secretmanager
-            project_id = os.getenv('GCP_PROJECT_ID')
-            client = secretmanager.SecretManagerServiceClient()
-            secret_name = f"projects/{project_id}/secrets/osm-config/versions/latest"
             response = client.access_secret_version(request={"name": secret_name})
             dictionary = yaml.safe_load(response.payload.data.decode('UTF-8'))
             _api_auth_values = dictionary['osm-api']
             _base_url = dictionary['base-url']
+            print("Successfully loaded OSM config from Secret Manager")
             return
         except Exception as e:
-            print(f"Warning: Failed to load from cloud, falling back to local: {e}")
+            print(f"ERROR loading from Secret Manager: {e}")
+            raise
     
-    # Fall back to local file
+    # Fall back to local file (development mode)
+    print("Loading OSM config from local file")
     with open('config/osm_config.yaml', 'r') as stream:
         try:
             dictionary = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             print(exc)
+            raise
     _api_auth_values = dictionary['osm-api']
     _base_url = dictionary['base-url']
 
