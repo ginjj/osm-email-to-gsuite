@@ -327,13 +327,6 @@ def require_authentication():
     # Show login page
     show_login_button()
     st.stop()
-            st.query_params.clear()
-            st.rerun()
-        return st.session_state.get('user_email')
-    
-    # Not authenticated - show login page
-    show_login_button()
-    st.stop()
 
 
 def get_authenticated_user():
