@@ -196,13 +196,13 @@ def handle_oauth_callback():
     code = st.query_params.get("code")
     
     if not code:
-        return False
+        return
     
     # Prevent re-processing the same code
     if st.session_state.get('_oauth_code_processed') == code:
-        # Code already processed, clear it
+        # Code already processed, just clear the URL
         st.query_params.clear()
-        return st.session_state.get('authenticated', False)
+        return
     
     # Show processing message
     with st.spinner("🔐 Completing sign-in..."):
@@ -227,10 +227,13 @@ def handle_oauth_callback():
                 st.session_state['access_token'] = token
                 st.session_state['_oauth_code_processed'] = code
                 
-                # Clear the code from URL and rerun to show authenticated app
+                # Clear the code from URL
                 st.query_params.clear()
+                
+                # Show success and rerun
                 st.success(f"✅ Signed in as {user_name or user_email}")
                 st.rerun()
+                
             else:
                 # Authorization failed
                 st.query_params.clear()
@@ -252,8 +255,6 @@ def handle_oauth_callback():
             if st.button("🔄 Try Again"):
                 st.rerun()
             st.stop()
-    
-    return False
 
 
 def require_authentication():
@@ -268,13 +269,15 @@ def require_authentication():
         st.session_state['authenticated'] = False
     
     # Handle OAuth callback first if present
-    if "code" in st.query_params and not st.session_state.get('authenticated'):
+    code = st.query_params.get("code")
+    if code and not st.session_state.get('authenticated'):
         handle_oauth_callback()
+        # After callback processing, check again
     
     # Check if user is authenticated
     if st.session_state.get('authenticated'):
         # User is authenticated - clear any leftover query params
-        if "code" in st.query_params:
+        if st.query_params.get("code"):
             st.query_params.clear()
             st.rerun()
         return st.session_state.get('user_email')
@@ -291,15 +294,14 @@ def get_authenticated_user():
 
 def logout():
     """Log out the current user and return to login page."""
-    # Store a flag to indicate we're logging out
-    # This prevents any partial state from persisting
-    for key in ['authenticated', 'user_email', 'user_name', 'access_token', '_oauth_code_processed']:
+    # Delete authentication keys explicitly
+    auth_keys = ['authenticated', 'user_email', 'user_name', 'access_token', '_oauth_code_processed']
+    for key in auth_keys:
         if key in st.session_state:
             del st.session_state[key]
     
-    # Clear any query parameters
-    if st.query_params:
-        st.query_params.clear()
+    # Clear query parameters
+    st.query_params.clear()
     
     # Rerun to show login page
     st.rerun()
