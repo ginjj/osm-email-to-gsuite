@@ -127,20 +127,6 @@ def show_dashboard(email_config):
     st.dataframe(sections_df, width='stretch')
     
     # Quick actions
-    st.markdown("---")
-    st.subheader("Quick Actions")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("🔄 Sync All Sections", width='stretch'):
-            st.info("Navigate to 'Sync to Google' tab to perform sync")
-    
-    with col2:
-        if st.button("⚙️ Manage Configuration", width='stretch'):
-            st.info("Navigate to 'Configuration' tab to manage sections")
-
-
-
 def show_sync_page(email_config, domain, dry_run):
     """Display sync operations page."""
     st.header("🔄 Sync to Google Workspace")
