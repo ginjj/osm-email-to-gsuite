@@ -127,7 +127,7 @@ def show_dashboard(email_config):
     st.subheader("Configured Sections")
     sections_df = pd.DataFrame(email_config['sections'])
     sections_df.columns = ['Section ID', 'Email Prefix']
-    st.dataframe(sections_df, use_container_width=True)
+    st.dataframe(sections_df, width='stretch')
     
     # Quick actions
     st.markdown("---")
@@ -135,16 +135,17 @@ def show_dashboard(email_config):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🔄 Sync All Sections", use_container_width=True):
+        if st.button("🔄 Sync All Sections", width='stretch'):
             st.info("Navigate to 'Sync to Google' tab to perform sync")
     
     with col2:
-        if st.button("📥 Export Members", use_container_width=True):
+        if st.button("📥 Export Members", width='stretch'):
             st.info("Navigate to 'Export to CSV' tab to export data")
     
     with col3:
-        if st.button("📈 View Attendance", use_container_width=True):
+        if st.button("📈 View Attendance", width='stretch'):
             st.info("Navigate to 'Attendance History' tab")
+
 
 
 def show_sync_page(email_config, domain, dry_run):
@@ -361,7 +362,7 @@ def show_export_page(email_config):
                 
                 # Display preview
                 st.subheader("Preview")
-                st.dataframe(df.head(10), use_container_width=True)
+                st.dataframe(df.head(10), width='stretch')
                 
                 # Download button
                 csv = df.to_csv(index=False)
