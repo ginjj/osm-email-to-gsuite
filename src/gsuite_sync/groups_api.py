@@ -85,28 +85,83 @@ class GoogleGroupsManager:
             # Get default service account credentials
             creds, project = google.auth.default(scopes=SCOPES)
             
-            # For Cloud Run, credentials are Compute Engine credentials
-            # We need to create delegated credentials using the service account
             print(f'Got credentials type: {type(creds).__name__}')
             
-            # Create delegated credentials with subject
-            if hasattr(creds, 'signer'):
-                # Use the service account signer to create delegated credentials
-                delegated_creds = service_account.Credentials(
-                    signer=creds.signer,
-                    service_account_email=creds.service_account_email,
-                    token_uri=creds.token_uri if hasattr(creds, 'token_uri') else 'https://oauth2.googleapis.com/token',
-                    scopes=SCOPES,
-                    subject=admin_email
-                )
-                creds = delegated_creds
-                print(f'Created delegated credentials for {admin_email}')
-            elif hasattr(creds, 'with_subject'):
-                # Service account credentials from file
-                creds = creds.with_subject(admin_email)
-                print(f'Used with_subject() to delegate to {admin_email}')
+            # For Compute Engine credentials, we need to use impersonation via IAM
+            # The service account needs the "Service Account Token Creator" role on itself
+            if hasattr(creds, 'service_account_email'):
+                sa_email = creds.service_account_email
+                print(f'Service account: {sa_email}')
+                
+                # Use IAM Credentials API to create delegated credentials
+                from google.auth import impersonated_credentials
+                
+                # First, create credentials that can impersonate (using current compute creds)
+                # Then create the delegated credentials with subject
+                target_scopes = SCOPES
+                
+                # Create impersonated credentials with domain-wide delegation
+                # Note: This requires the service account to have domain-wide delegation enabled
+                try:
+                    # We need to manually construct the delegated credentials
+                    # using the service account's ability to sign JWTs
+                    from google.oauth2 import service_account as sa_module
+                    import json
+                    import time
+                    
+                    # Create a minimal service account info dict
+                    # We'll use the IAM signBlob API to sign tokens
+                    class IAMSigner:
+                        """Signer that uses IAM Credentials API."""
+                        def __init__(self, source_credentials, service_account_email):
+                            self._source_credentials = source_credentials
+                            self._service_account_email = service_account_email
+                        
+                        @property  
+                        def key_id(self):
+                            return None
+                        
+                        def sign(self, message):
+                            from google.auth.transport.requests import AuthorizedSession
+                            import base64
+                            
+                            # Ensure source credentials are fresh
+                            if not self._source_credentials.valid:
+                                self._source_credentials.refresh(Request())
+                            
+                            session = AuthorizedSession(self._source_credentials)
+                            url = f'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/{self._service_account_email}:signBlob'
+                            
+                            body = {
+                                'payload': base64.b64encode(message).decode('utf-8')
+                            }
+                            
+                            response = session.post(url, json=body)
+                            if response.status_code != 200:
+                                raise ValueError(f'Sign failed: {response.text}')
+                            
+                            return base64.b64decode(response.json()['signedBlob'])
+                    
+                    # Create signer
+                    signer = IAMSigner(creds, sa_email)
+                    
+                    # Create service account credentials with delegation
+                    delegated_creds = service_account.Credentials(
+                        signer=signer,
+                        service_account_email=sa_email,
+                        token_uri='https://oauth2.googleapis.com/token',
+                        scopes=SCOPES,
+                        subject=admin_email  # This enables domain-wide delegation
+                    )
+                    
+                    creds = delegated_creds
+                    print(f'Created delegated credentials for {admin_email}')
+                    
+                except Exception as e:
+                    print(f'Failed to create delegated credentials: {e}')
+                    raise
             else:
-                raise TypeError(f'Unsupported credentials type: {type(creds)}. Cannot delegate.')
+                raise TypeError(f'Cannot extract service account email from credentials')
             
             self.service = build('admin', 'directory_v1', credentials=creds)
             print('Successfully authenticated with Google Workspace Admin SDK (Service Account)')
