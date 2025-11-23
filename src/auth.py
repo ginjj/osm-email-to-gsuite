@@ -42,8 +42,14 @@ async def get_access_token(client, redirect_uri, code):
 
 async def get_user_info(client, token):
     """Get user information from Google."""
-    user_id, user_email = await client.get_id_email(token)
-    return user_id, user_email
+    try:
+        user_id, user_email = await client.get_id_email(token)
+        return user_id, user_email
+    except Exception as e:
+        st.error(f"Error retrieving user info: {e}")
+        st.error(f"Token type: {type(token)}")
+        st.error(f"Token: {token}")
+        raise
 
 
 def check_user_authorization(user_email: str) -> bool:
