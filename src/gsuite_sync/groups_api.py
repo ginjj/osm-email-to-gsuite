@@ -82,8 +82,10 @@ class GoogleGroupsManager:
             
             print(f'Will delegate to admin user: {admin_email}')
             
-            # Get default service account credentials
-            creds, project = google.auth.default(scopes=SCOPES)
+            # Get default service account credentials with IAM scope for signBlob
+            # We need both the Admin SDK scope and the IAM Credentials scope
+            all_scopes = SCOPES + ['https://www.googleapis.com/auth/iam']
+            creds, project = google.auth.default(scopes=all_scopes)
             
             print(f'Got credentials type: {type(creds).__name__}')
             
