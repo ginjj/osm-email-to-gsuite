@@ -1,18 +1,52 @@
 import yaml
 import requests
 import re
+import os
 from pprint import pprint
 from typing import List
 from .models import Section, Member, Term
 
-# Get OSM API coniguration 
-with open('config/osm_config.yaml', 'r') as stream:
-    try:
-        dictionary = yaml.safe_load(stream)
-    except yaml.YAMLError as exc:
-        print(exc)
-api_auth_values = dictionary['osm-api']
-base_url = dictionary['base-url']
+# Get OSM API configuration - lazy load to support cloud environment
+_api_auth_values = None
+_base_url = None
+
+def _load_config():
+    """Load OSM config from file or cloud."""
+    global _api_auth_values, _base_url
+    
+    if _api_auth_values is not None:
+        return
+    
+    # Try to use cloud config first if in cloud environment
+    if os.getenv('USE_CLOUD_CONFIG') == 'true':
+        try:
+            from google.cloud import secretmanager
+            project_id = os.getenv('GCP_PROJECT_ID')
+            client = secretmanager.SecretManagerServiceClient()
+            secret_name = f"projects/{project_id}/secrets/osm-config/versions/latest"
+            response = client.access_secret_version(request={"name": secret_name})
+            dictionary = yaml.safe_load(response.payload.data.decode('UTF-8'))
+            _api_auth_values = dictionary['osm-api']
+            _base_url = dictionary['base-url']
+            return
+        except Exception as e:
+            print(f"Warning: Failed to load from cloud, falling back to local: {e}")
+    
+    # Fall back to local file
+    with open('config/osm_config.yaml', 'r') as stream:
+        try:
+            dictionary = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+    _api_auth_values = dictionary['osm-api']
+    _base_url = dictionary['base-url']
+
+# Initialize config on module import
+_load_config()
+
+# Make variables available at module level
+api_auth_values = _api_auth_values
+base_url = _base_url
 
 
 def get_sections() -> List[Section]:
