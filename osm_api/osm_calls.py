@@ -1,7 +1,9 @@
 import yaml
 import requests
 import re
-from pprint import pprint 
+from pprint import pprint
+from typing import List
+from .models import Section, Member, Term
 
 # Get OSM API coniguration 
 with open('osm_config.yaml', 'r') as stream:
@@ -13,7 +15,23 @@ api_auth_values = dictionary['osm-api']
 base_url = dictionary['base-url']
 
 
-def get_sections():     # Get sections
+def get_sections() -> List[Section]:
+    """Get sections as Section objects."""
+    url_path = 'api.php?action=getUserRoles'
+    user_roles_data = osm_post(url_path, api_auth_values)
+    sections = []
+    for section in user_roles_data:
+        section_obj = Section(
+            sectionid=section['sectionid'],
+            sectionname=section['sectionname'],
+            section=section['section']
+        )
+        sections.append(section_obj)
+    return sections
+
+
+def get_sections_dict():
+    """DEPRECATED: Use get_sections() instead. Returns sections as dictionaries for backward compatibility."""
     url_path = 'api.php?action=getUserRoles'
     user_roles_data = osm_post(url_path, api_auth_values)
     sections = []
@@ -26,12 +44,30 @@ def get_sections():     # Get sections
     return sections
 
 
-def get_terms(sections):    # Get latest started (i.e. 'past') term
+def get_terms(sections: List[Section]) -> List[Term]:
+    """Get latest started terms as Term objects for given sections."""
     url_path = 'api.php?action=getTerms'
     terms_data = osm_post(url_path, api_auth_values)
     terms = []    
     for section in sections:
-        started_terms = [n for n in terms_data[section['sectionid']] if n['past'] == True]
+        started_terms = [n for n in terms_data[section.sectionid] if n['past'] == True]
+        current_term_dict = max(started_terms, key=lambda x:x['startdate'])
+        current_term = Term.from_osm_dict({
+            **current_term_dict,
+            'sectionid': section.sectionid
+        })
+        terms.append(current_term)
+    return terms
+
+
+def get_terms_dict(sections):
+    """DEPRECATED: Use get_terms() instead. Returns terms as dictionaries for backward compatibility."""
+    url_path = 'api.php?action=getTerms'
+    terms_data = osm_post(url_path, api_auth_values)
+    terms = []    
+    for section in sections:
+        section_id = section.get('sectionid') if isinstance(section, dict) else section.sectionid
+        started_terms = [n for n in terms_data[section_id] if n['past'] == True]
         current_term = max(started_terms, key=lambda x:x['startdate'])
         term_items = {key: current_term[key] for key in (
             'sectionid',
@@ -60,7 +96,30 @@ def get_all_terms(sections):    # Get all terms trial 11/2021
     return terms
 
 
-def get_members(section, term):    # Get members for a given section and term
+def get_members(section_id: str, term_id: str) -> List[Member]:
+    """Get members for a given section and term as Member objects."""
+    values = {'section_id': section_id, 'term_id': term_id}
+    values.update(api_auth_values)
+    url_path = 'ext/members/contact/grid/?action=getMembers'
+    members_data = osm_post(url_path, values)
+    
+    if not members_data or 'data' not in members_data:
+        return []
+    
+    members = []
+    for member_id, member_data in members_data['data'].items():
+        try:
+            member = Member.from_osm_dict(member_data)
+            members.append(member)
+        except Exception as e:
+            print(f'Warning: Could not parse member {member_id}: {e}')
+            continue
+    
+    return members
+
+
+def get_members_dict(section, term):
+    """DEPRECATED: Use get_members() instead. Get members for a given section and term as dictionaries."""
     values = {'section_id': section, 'term_id': term}
     values.update(api_auth_values)
     url_path = 'ext/members/contact/grid/?action=getMembers'

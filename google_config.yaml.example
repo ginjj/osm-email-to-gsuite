@@ -1,0 +1,21 @@
+# Google Workspace Configuration
+
+# Your Google Workspace domain (e.g., example.com)
+domain: example.com
+
+# Authentication method: 'oauth' or 'service_account'
+# - oauth: Interactive browser-based authentication (recommended for local development)
+# - service_account: Non-interactive authentication (recommended for production/automation)
+auth_method: oauth
+
+# OAuth 2.0 Credentials File
+# Download from: Google Cloud Console > APIs & Services > Credentials
+# Create: OAuth 2.0 Client ID (Desktop app type)
+credentials_file: google_credentials.json
+
+# Service Account Configuration (if using service_account auth_method)
+# service_account_file: service-account-key.json
+# service_account_subject: admin@example.com  # Admin user to impersonate
+
+# Token cache file (auto-generated after first OAuth authentication)
+token_file: token.pickle

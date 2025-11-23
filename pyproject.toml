@@ -1,0 +1,51 @@
+[tool.poetry]
+name = "osm-email-to-gsuite"
+version = "2.0.0"
+description = "Synchronize member data from Online Scout Manager to Google Workspace groups"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+license = "MIT"
+homepage = "https://github.com/ginjj/osm-email-to-gsuite"
+repository = "https://github.com/ginjj/osm-email-to-gsuite"
+keywords = ["osm", "google-workspace", "scouts", "scouting"]
+
+[tool.poetry.dependencies]
+python = "^3.13.5"
+PyYAML = "^6.0"
+requests = "^2.31.0"
+pandas = "^2.0.0"
+google-api-python-client = "^2.100.0"
+google-auth-httplib2 = "^0.1.1"
+google-auth-oauthlib = "^1.1.0"
+streamlit = "^1.28.0"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.0.0"
+pytest = "^7.4.0"
+black = "^23.0.0"
+mypy = "^1.7.0"
+
+[tool.poetry.scripts]
+osm-sync = "sync_api:main"
+osm-web = "app:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py313']
+
+[tool.pylint.messages_control]
+max-line-length = 100
+disable = [
+    "C0103",  # Invalid name
+    "C0114",  # Missing module docstring
+]
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
