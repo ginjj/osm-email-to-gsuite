@@ -89,11 +89,16 @@ class Member:
             if member_email:
                 email_lower = member_email.lower()
                 if EMAIL_REGEX.match(email_lower):
+                    # Normalize googlemail.com to gmail.com (Google Groups converts them)
+                    email_lower = email_lower.replace('@googlemail.com', '@gmail.com')
                     all_emails.append(email_lower)
         
         # Add all contact emails
         for contact in self.contacts:
-            all_emails.extend(contact.get_valid_emails())
+            emails = contact.get_valid_emails()
+            # Normalize googlemail.com to gmail.com for all contact emails
+            emails = [email.replace('@googlemail.com', '@gmail.com') for email in emails]
+            all_emails.extend(emails)
         
         return all_emails
     
