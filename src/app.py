@@ -80,7 +80,17 @@ def main():
         
         # Clear cache button
         if st.button("🔄 Clear Cache & Reload", help="Clear cached data and reload from OSM"):
+            # Preserve authentication state
+            auth_keys = ['authenticated', 'user_email', 'user_name', 'access_token', '_oauth_code_processed']
+            auth_data = {k: st.session_state[k] for k in auth_keys if k in st.session_state}
+            
+            # Clear all session state
             st.session_state.clear()
+            
+            # Restore authentication
+            for k, v in auth_data.items():
+                st.session_state[k] = v
+            
             st.rerun()
         
         # Dry run toggle

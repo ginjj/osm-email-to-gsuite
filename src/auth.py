@@ -193,58 +193,67 @@ def show_login_button():
 def handle_oauth_callback():
     """Handle the OAuth callback and authenticate the user."""
     # Get the authorization code from URL parameters
-    query_params = st.query_params
+    code = st.query_params.get("code")
     
-    if "code" in query_params:
-        code = query_params["code"]
+    if not code:
+        return False
+    
+    # Prevent re-processing the same code
+    if st.session_state.get('_oauth_code_processed') == code:
+        # Code already processed, clear it
+        st.query_params.clear()
+        return st.session_state.get('authenticated', False)
+    
+    # Show processing message
+    with st.spinner("🔐 Completing sign-in..."):
+        client = get_oauth_client()
+        redirect_uri = REDIRECT_URI
+        if os.getenv('K_SERVICE'):
+            redirect_uri = os.getenv('CLOUD_RUN_URL', REDIRECT_URI)
         
-        # Show processing message
-        with st.spinner("🔐 Completing sign-in..."):
-            client = get_oauth_client()
-            redirect_uri = REDIRECT_URI
-            if os.getenv('K_SERVICE'):
-                redirect_uri = os.getenv('CLOUD_RUN_URL', REDIRECT_URI)
+        try:
+            # Exchange code for token
+            token = asyncio.run(get_access_token(client, redirect_uri, code))
             
-            try:
-                # Exchange code for token
-                token = asyncio.run(get_access_token(client, redirect_uri, code))
+            # Get user info (now includes name)
+            user_id, user_email, user_name = asyncio.run(get_user_info(client, token))
+            
+            # Check authorization
+            if check_user_authorization(user_email):
+                # Store in session state
+                st.session_state['authenticated'] = True
+                st.session_state['user_email'] = user_email
+                st.session_state['user_name'] = user_name or user_email.split('@')[0]
+                st.session_state['access_token'] = token
+                st.session_state['_oauth_code_processed'] = code
                 
-                # Get user info (now includes name)
-                user_id, user_email, user_name = asyncio.run(get_user_info(client, token))
+                # Clear the code from URL and rerun to show authenticated app
+                st.query_params.clear()
+                st.success(f"✅ Signed in as {user_name or user_email}")
+                st.rerun()
+            else:
+                # Authorization failed
+                st.query_params.clear()
+                st.error(f"""
+                ❌ **Access Denied**
                 
-                # Check authorization
-                if check_user_authorization(user_email):
-                    # Store in session state
-                    st.session_state['authenticated'] = True
-                    st.session_state['user_email'] = user_email
-                    st.session_state['user_name'] = user_name or user_email.split('@')[0]
-                    st.session_state['access_token'] = token
-                    
-                    # Clear the code from URL
-                    st.query_params.clear()
-                    display_name = user_name or user_email
-                    st.success(f"✅ Signed in as {display_name}")
-                    st.rerun()
-                else:
-                    st.query_params.clear()  # Clear code even on failure
-                    st.error(f"""
-                    ❌ **Access Denied**
-                    
-                    Your email address ({user_email}) is not authorized to access this application.
-                    
-                    **To gain access:**
-                    - Contact an administrator
-                    - Ask to be added to the `{AUTHORIZED_GROUP}` Google Group
-                    - Try signing in again after being added
-                    """)
-                    st.stop()
-                    
-            except Exception as e:
-                st.query_params.clear()  # Clear code on error
-                st.error(f"Authentication error: {e}")
-                if st.button("Try Again"):
-                    st.rerun()
+                Your email address ({user_email}) is not authorized to access this application.
+                
+                **To gain access:**
+                - Contact an administrator
+                - Ask to be added to the `{AUTHORIZED_GROUP}` Google Group
+                - Try signing in again after being added
+                """)
                 st.stop()
+                
+        except Exception as e:
+            st.query_params.clear()
+            st.error(f"❌ **Authentication error**: {e}")
+            if st.button("🔄 Try Again"):
+                st.rerun()
+            st.stop()
+    
+    return False
 
 
 def require_authentication():
@@ -254,25 +263,23 @@ def require_authentication():
     Returns:
         User email if authenticated, otherwise shows login page and stops execution.
     """
-    # Check if user is already authenticated FIRST
-    # This allows skipping the landing page when already logged in
+    # Initialize authentication state if not present
+    if 'authenticated' not in st.session_state:
+        st.session_state['authenticated'] = False
+    
+    # Handle OAuth callback first if present
+    if "code" in st.query_params and not st.session_state.get('authenticated'):
+        handle_oauth_callback()
+    
+    # Check if user is authenticated
     if st.session_state.get('authenticated'):
-        # Clear any leftover query parameters from OAuth flow
-        query_params = st.query_params
-        if "code" in query_params:
+        # User is authenticated - clear any leftover query params
+        if "code" in st.query_params:
             st.query_params.clear()
+            st.rerun()
         return st.session_state.get('user_email')
     
-    # Check if there's an OAuth callback in progress
-    query_params = st.query_params
-    if "code" in query_params:
-        # Handle OAuth callback
-        handle_oauth_callback()
-        # After handling callback, check authentication again
-        if st.session_state.get('authenticated'):
-            return st.session_state.get('user_email')
-    
-    # Show login page
+    # Not authenticated - show login page
     show_login_button()
     st.stop()
 
@@ -283,15 +290,16 @@ def get_authenticated_user():
 
 
 def logout():
-    """Log out the current user."""
-    # Clear query parameters first
-    st.query_params.clear()
+    """Log out the current user and return to login page."""
+    # Store a flag to indicate we're logging out
+    # This prevents any partial state from persisting
+    for key in ['authenticated', 'user_email', 'user_name', 'access_token', '_oauth_code_processed']:
+        if key in st.session_state:
+            del st.session_state[key]
     
-    # Clear all session state keys one by one
-    # Use list() to avoid dictionary size change during iteration
-    keys_to_delete = list(st.session_state.keys())
-    for key in keys_to_delete:
-        del st.session_state[key]
+    # Clear any query parameters
+    if st.query_params:
+        st.query_params.clear()
     
-    # Force a rerun to show login page
+    # Rerun to show login page
     st.rerun()
