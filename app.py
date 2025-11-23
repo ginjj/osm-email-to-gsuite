@@ -400,8 +400,13 @@ def show_config_page(email_config):
     # Display existing sections
     st.subheader("Current Sections")
     
+    # Initialize additions list if needed
+    if 'config_additions' not in st.session_state:
+        st.session_state['config_additions'] = []
+    
     modified_sections = []
     
+    # Display existing sections
     for idx, section in enumerate(email_config['sections']):
         if idx in st.session_state['config_to_delete']:
             continue  # Skip deleted sections
@@ -440,24 +445,59 @@ def show_config_page(email_config):
             modified_section['email'] = st.session_state['config_changes'][idx]
         modified_sections.append(modified_section)
     
+    # Display pending additions (new sections to be added)
+    for add_idx, addition in enumerate(st.session_state['config_additions']):
+        col1, col2, col3 = st.columns([2, 3, 1])
+        
+        with col1:
+            st.text_input(
+                "Section ID",
+                value=addition['id'],
+                key=f"new_section_id_display_{add_idx}",
+                disabled=True
+            )
+        
+        with col2:
+            st.text_input(
+                "Email Prefix",
+                value=addition['email'],
+                key=f"new_section_email_display_{add_idx}",
+                help="Pending addition - will be saved when you click Save Changes",
+                disabled=True
+            )
+        
+        with col3:
+            st.write("")  # Spacing
+            st.write("")  # Spacing
+            if st.button("🗑️", key=f"delete_new_{add_idx}", help="Remove this pending addition"):
+                st.session_state['config_additions'].pop(add_idx)
+                st.rerun()
+        
+        # Add to modified sections
+        modified_sections.append(addition)
+    
     st.markdown("---")
     
     # Add new section
     st.subheader("Add New Section")
+    
+    # Use a counter to reset input fields after add/save
+    if 'add_section_counter' not in st.session_state:
+        st.session_state['add_section_counter'] = 0
     
     col1, col2, col3 = st.columns([2, 3, 1])
     
     with col1:
         new_section_id = st.text_input(
             "New Section ID",
-            key="new_section_id",
+            key=f"new_section_id_{st.session_state['add_section_counter']}",
             help="Get this from OSM (F12 → Network → look for sectionid in requests)"
         )
     
     with col2:
         new_section_email = st.text_input(
             "Email Prefix",
-            key="new_section_email",
+            key=f"new_section_email_{st.session_state['add_section_counter']}",
             help="e.g., 'beavers' for beaversleaders@domain.com"
         )
     
@@ -466,14 +506,16 @@ def show_config_page(email_config):
         st.write("")  # Spacing
         if st.button("➕ Add", key="add_section"):
             if new_section_id and new_section_email:
-                modified_sections.append({
+                # Add to pending additions list
+                if 'config_additions' not in st.session_state:
+                    st.session_state['config_additions'] = []
+                st.session_state['config_additions'].append({
                     'id': new_section_id,
                     'email': new_section_email
                 })
-                st.success(f"Added section {new_section_id} with prefix '{new_section_email}'")
-                # Clear inputs
-                st.session_state['new_section_id'] = ""
-                st.session_state['new_section_email'] = ""
+                # Increment counter to reset input fields
+                st.session_state['add_section_counter'] += 1
+                st.rerun()
             else:
                 st.error("Please fill in both Section ID and Email Prefix")
     
@@ -483,7 +525,7 @@ def show_config_page(email_config):
     has_changes = (
         len(st.session_state['config_changes']) > 0 or 
         len(st.session_state['config_to_delete']) > 0 or
-        len(modified_sections) != len(email_config['sections'])
+        len(st.session_state.get('config_additions', [])) > 0
     )
     
     col1, col2, col3 = st.columns([1, 1, 4])
@@ -508,6 +550,9 @@ def show_config_page(email_config):
                     # Clear change tracking
                     st.session_state['config_changes'] = {}
                     st.session_state['config_to_delete'] = set()
+                    st.session_state['config_additions'] = []
+                    # Increment counter to reset add section input fields
+                    st.session_state['add_section_counter'] += 1
                     # Clear cached sections to force reload
                     if 'sections' in st.session_state:
                         del st.session_state['sections']
@@ -521,10 +566,18 @@ def show_config_page(email_config):
         if st.button("🔄 Reset", disabled=not has_changes):
             st.session_state['config_changes'] = {}
             st.session_state['config_to_delete'] = set()
+            st.session_state['config_additions'] = []
             st.rerun()
     
     if has_changes:
-        st.info(f"You have unsaved changes ({len(st.session_state['config_changes'])} edits, {len(st.session_state['config_to_delete'])} deletions)")
+        changes_text = []
+        if st.session_state['config_changes']:
+            changes_text.append(f"{len(st.session_state['config_changes'])} edits")
+        if st.session_state.get('config_additions'):
+            changes_text.append(f"{len(st.session_state['config_additions'])} additions")
+        if st.session_state['config_to_delete']:
+            changes_text.append(f"{len(st.session_state['config_to_delete'])} deletions")
+        st.info(f"You have unsaved changes ({', '.join(changes_text)})")
 
 
 def show_config_page_old(email_config):
