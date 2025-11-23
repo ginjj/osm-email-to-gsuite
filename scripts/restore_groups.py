@@ -5,8 +5,8 @@ Usage: python restore_groups.py <snapshot_file>
 import json
 import sys
 from pathlib import Path
-from gsuite_sync.groups_api import GoogleGroupsManager
-from config_manager import get_config_manager
+from src.gsuite_sync.groups_api import GoogleGroupsManager
+from src.config_manager import get_config_manager
 
 def restore_groups(snapshot_file: str, dry_run: bool = True):
     """Restore groups to snapshot state."""

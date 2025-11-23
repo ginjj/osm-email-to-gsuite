@@ -11,13 +11,10 @@ from io import StringIO
 import sys
 from typing import List, Dict
 
-# Add parent directory to path for imports
-sys.path.insert(0, '.')
-
-from osm_api import osm_calls
-from osm_api.models import Section, Member
-from gsuite_sync import groups_api
-from config_manager import get_config_manager
+from src.osm_api import osm_calls
+from src.osm_api.models import Section, Member
+from src.gsuite_sync import groups_api
+from src.config_manager import get_config_manager
 
 
 # Page configuration

@@ -28,8 +28,10 @@ black = "^23.0.0"
 mypy = "^1.7.0"
 
 [tool.poetry.scripts]
-osm-sync = "sync_api:main"
-osm-web = "app:main"
+osm-sync = "src.sync_api:main"
+osm-web = "src.app:main"
+osm-snapshot = "scripts.snapshot_groups:snapshot_groups"
+osm-restore = "scripts.restore_groups:restore_groups"
 
 [build-system]
 requires = ["poetry-core"]

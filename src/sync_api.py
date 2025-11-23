@@ -5,9 +5,9 @@ Updated to use native Google API instead of GAMADV-XTD3.
 import sys
 import yaml
 from typing import List, Dict
-from osm_api import osm_calls
-from osm_api.models import Section
-from gsuite_sync import groups_api
+from src.osm_api import osm_calls
+from src.osm_api.models import Section
+from src.gsuite_sync import groups_api
 
 
 def main():

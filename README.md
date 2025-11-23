@@ -27,12 +27,12 @@ curl -sSL https://install.python-poetry.org | python3 -
 poetry install
 
 # Configure credentials (copy and edit .example files)
-cp osm_config.yaml.example osm_config.yaml
-cp email_config.yaml.example email_config.yaml
-cp google_config.yaml.example google_config.yaml
+cp config/osm_config.yaml.example config/osm_config.yaml
+cp config/email_config.yaml.example config/email_config.yaml
+cp config/google_config.yaml.example config/google_config.yaml
 
 # Run web app
-poetry run streamlit run app.py
+poetry run streamlit run src/app.py
 # Or use the convenience script:
 poetry run osm-web
 ```
@@ -43,7 +43,7 @@ Visit `http://localhost:8501` in your browser.
 
 ```bash
 # Modern API-based sync (recommended)
-poetry run python sync_api.py
+poetry run python src/sync_api.py
 # Or use the convenience script:
 poetry run osm-sync
 

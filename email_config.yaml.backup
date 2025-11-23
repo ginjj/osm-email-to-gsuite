@@ -1,0 +1,14 @@
+# Online Scout Manager Sections and email group name
+sections:
+  - id    : "12137"
+    email : smithies
+  - id    : "12049"
+    email : skidmore
+  - id    : "818"
+    email : longmore
+  - id    : "12783"
+    email : wilson
+  - id    : "2303"
+    email : salamanca
+  - id    : "2302"
+    email : gibraltar

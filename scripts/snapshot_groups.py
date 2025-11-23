@@ -5,8 +5,8 @@ Records all members in each group so we can revert if needed.
 import json
 from datetime import datetime
 from pathlib import Path
-from gsuite_sync.groups_api import GoogleGroupsManager
-from config_manager import get_config_manager
+from src.gsuite_sync.groups_api import GoogleGroupsManager
+from src.config_manager import get_config_manager
 
 def snapshot_groups():
     """Take a snapshot of all current group memberships."""
