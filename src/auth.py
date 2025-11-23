@@ -294,6 +294,21 @@ def get_authenticated_user():
 
 def logout():
     """Log out the current user and return to login page."""
+    # Get the access token before clearing session
+    access_token = st.session_state.get('access_token')
+    
+    # Revoke the Google OAuth token
+    if access_token:
+        try:
+            import requests
+            # Revoke the token at Google
+            revoke_url = "https://oauth2.googleapis.com/revoke"
+            token_value = access_token.get('access_token') if isinstance(access_token, dict) else str(access_token)
+            requests.post(revoke_url, params={'token': token_value}, headers={'content-type': 'application/x-www-form-urlencoded'})
+        except Exception as e:
+            # Log error but continue with logout
+            print(f"Error revoking token: {e}")
+    
     # Delete authentication keys explicitly
     auth_keys = ['authenticated', 'user_email', 'user_name', 'access_token', '_oauth_code_processed']
     for key in auth_keys:
@@ -303,5 +318,11 @@ def logout():
     # Clear query parameters
     st.query_params.clear()
     
-    # Rerun to show login page
-    st.rerun()
+    # Redirect to Google logout to clear Google session, then back to our app
+    google_logout_url = f"https://accounts.google.com/Logout?continue=https://appengine.google.com/_ah/logout?continue={REDIRECT_URI}"
+    
+    st.markdown(f"""
+    <meta http-equiv="refresh" content="0;url={google_logout_url}">
+    <p>Signing out...</p>
+    """, unsafe_allow_html=True)
+    st.stop()
