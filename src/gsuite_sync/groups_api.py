@@ -68,39 +68,49 @@ class GoogleGroupsManager:
         
         # Try Service Account with domain-wide delegation (for Cloud Run / GCE)
         if os.getenv('USE_CLOUD_CONFIG') == 'true':
-            try:
-                print('Attempting authentication with Service Account (domain-wide delegation)...')
-                
-                # Load google_config to get admin email for subject delegation
-                config = self._load_google_config()
-                admin_email = config.get('service_account_subject')
-                
-                if not admin_email:
-                    raise ValueError(
-                        'service_account_subject not set in google_config. '
-                        'Service account needs to impersonate an admin user for domain-wide delegation.'
-                    )
-                
-                # Get default service account credentials
-                creds, project = google.auth.default(scopes=SCOPES)
-                
-                # Delegate to admin user (required for Admin SDK)
-                if hasattr(creds, 'with_subject'):
-                    creds = creds.with_subject(admin_email)
-                    print(f'Delegating to admin user: {admin_email}')
-                else:
-                    # For Compute Engine default service account, we need to use service_account.Credentials
-                    print('Using service account with subject delegation...')
-                    creds = service_account.Credentials.from_service_account_info(
-                        {}, scopes=SCOPES, subject=admin_email
-                    )
-                
-                self.service = build('admin', 'directory_v1', credentials=creds)
-                print('Successfully authenticated with Google Workspace Admin SDK (Service Account)')
-                return
-            except Exception as e:
-                print(f'Service Account authentication failed: {e}')
-                print('Falling back to OAuth flow...')
+            print('Attempting authentication with Service Account (domain-wide delegation)...')
+            
+            # Load google_config to get admin email for subject delegation
+            config = self._load_google_config()
+            admin_email = config.get('service_account_subject')
+            
+            if not admin_email:
+                raise ValueError(
+                    'service_account_subject not set in google_config. '
+                    'Service account needs to impersonate an admin user for domain-wide delegation.'
+                )
+            
+            print(f'Will delegate to admin user: {admin_email}')
+            
+            # Get default service account credentials
+            creds, project = google.auth.default(scopes=SCOPES)
+            
+            # For Cloud Run, credentials are Compute Engine credentials
+            # We need to create delegated credentials using the service account
+            print(f'Got credentials type: {type(creds).__name__}')
+            
+            # Create delegated credentials with subject
+            if hasattr(creds, 'signer'):
+                # Use the service account signer to create delegated credentials
+                delegated_creds = service_account.Credentials(
+                    signer=creds.signer,
+                    service_account_email=creds.service_account_email,
+                    token_uri=creds.token_uri if hasattr(creds, 'token_uri') else 'https://oauth2.googleapis.com/token',
+                    scopes=SCOPES,
+                    subject=admin_email
+                )
+                creds = delegated_creds
+                print(f'Created delegated credentials for {admin_email}')
+            elif hasattr(creds, 'with_subject'):
+                # Service account credentials from file
+                creds = creds.with_subject(admin_email)
+                print(f'Used with_subject() to delegate to {admin_email}')
+            else:
+                raise TypeError(f'Unsupported credentials type: {type(creds)}. Cannot delegate.')
+            
+            self.service = build('admin', 'directory_v1', credentials=creds)
+            print('Successfully authenticated with Google Workspace Admin SDK (Service Account)')
+            return
         
         # Fall back to OAuth for local development
         # Load existing token
