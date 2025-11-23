@@ -108,6 +108,9 @@ def get_members(section_id: str, term_id: str) -> List[Member]:
     
     members = []
     for member_id, member_data in members_data['data'].items():
+        # Skip non-dict entries (archived/deleted members returned as lists)
+        if not isinstance(member_data, dict):
+            continue
         try:
             member = Member.from_osm_dict(member_data)
             members.append(member)

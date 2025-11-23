@@ -109,10 +109,7 @@ class GoogleGroupsManager:
         Returns:
             Set of member email addresses
         """
-        if self.dry_run:
-            print(f'[DRY RUN] Would get members from: {group_email}')
-            return set()
-        
+        # Even in dry run mode, we need to fetch current members to show accurate diffs
         members = set()
         try:
             page_token = None
@@ -192,13 +189,24 @@ class GoogleGroupsManager:
             print(f'Error removing {member_email} from {group_email}: {e}')
             return False
     
-    def sync_group(self, group_name: str, target_emails: Set[str]):
+    def sync_group(self, group_name: str, target_emails: Set[str]) -> dict:
         """
         Synchronize group membership to match target email set.
         
         Args:
             group_name: Group name without domain (e.g., 'leaders')
             target_emails: Set of email addresses that should be in the group
+            
+        Returns:
+            Dict with sync results: {
+                'group_email': str,
+                'current_count': int,
+                'target_count': int,
+                'added_count': int,
+                'removed_count': int,
+                'added_emails': list,
+                'removed_emails': list
+            }
         """
         # Construct full group email
         if self.domain:
@@ -226,22 +234,44 @@ class GoogleGroupsManager:
             if to_remove:
                 print(f'  Would remove: {", ".join(sorted(to_remove))}')
             print('[DRY RUN] No changes made')
-            return
+            return {
+                'group_email': group_email,
+                'current_count': len(current_emails),
+                'target_count': len(target_emails),
+                'added_count': len(to_add),
+                'removed_count': len(to_remove),
+                'added_emails': sorted(to_add),
+                'removed_emails': sorted(to_remove)
+            }
         
         # Add new members
         added = 0
+        added_list = []
         for email in to_add:
             if self.add_member(group_email, email):
                 added += 1
+                added_list.append(email)
         
         # Remove old members
         removed = 0
+        removed_list = []
         for email in to_remove:
             if self.remove_member(group_email, email):
                 removed += 1
+                removed_list.append(email)
         
         print(f'  Successfully added: {added}, removed: {removed}')
         print(f'Successfully completed synchronizing {group_email}\n')
+        
+        return {
+            'group_email': group_email,
+            'current_count': len(current_emails),
+            'target_count': len(target_emails),
+            'added_count': added,
+            'removed_count': removed,
+            'added_emails': sorted(added_list),
+            'removed_emails': sorted(removed_list)
+        }
 
 
 def gam_sync_group(group_name: str, email_address_set: Set[str], domain: Optional[str] = None):

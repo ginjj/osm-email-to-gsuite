@@ -20,11 +20,11 @@ class Contact:
     email_2: Optional[str] = None
     
     def get_valid_emails(self) -> List[str]:
-        """Return list of valid email addresses for this contact."""
+        """Return list of valid email addresses for this contact (normalized to lowercase)."""
         valid_emails = []
         for email in [self.email_1, self.email_2]:
             if email and EMAIL_REGEX.match(email):
-                valid_emails.append(email)
+                valid_emails.append(email.lower())  # Normalize to lowercase
         return valid_emails
     
     @property
@@ -44,6 +44,8 @@ class Member:
     section_id: str
     joined: Optional[date] = None
     started: Optional[date] = None
+    member_email_1: Optional[str] = None  # Member's own email address 1
+    member_email_2: Optional[str] = None  # Member's own email address 2
     contacts: List[Contact] = field(default_factory=list)
     
     def age_at_date(self, reference_date: date) -> int:
@@ -60,8 +62,8 @@ class Member:
     
     @property
     def is_leader(self) -> bool:
-        """Check if member is in the Leaders patrol."""
-        return self.patrol == 'Leaders'
+        """Check if member is in the Leaders or Young Leaders patrol."""
+        return self.patrol in ('Leaders', 'Young Leaders (YLs)')
     
     @property
     def is_adult_leader(self) -> bool:
@@ -79,10 +81,20 @@ class Member:
         return f"{self.first_name} {self.last_name}"
     
     def get_contact_emails(self) -> List[str]:
-        """Get all valid email addresses from all contacts."""
+        """Get all valid email addresses including member's own emails and all contacts."""
         all_emails = []
+        
+        # Add member's own emails if they exist and are valid
+        for member_email in [self.member_email_1, self.member_email_2]:
+            if member_email:
+                email_lower = member_email.lower()
+                if EMAIL_REGEX.match(email_lower):
+                    all_emails.append(email_lower)
+        
+        # Add all contact emails
         for contact in self.contacts:
             all_emails.extend(contact.get_valid_emails())
+        
         return all_emails
     
     @classmethod
@@ -93,12 +105,24 @@ class Member:
         joined = date.fromisoformat(data['joined']) if data.get('joined') else None
         started = date.fromisoformat(data['started']) if data.get('started') else None
         
+        # Parse member's own emails from custom_data group 6, fields 12 and 14
+        member_email_1 = None
+        member_email_2 = None
+        if 'custom_data' in data and '6' in data['custom_data']:
+            member_custom = data['custom_data']['6']
+            if isinstance(member_custom, dict):
+                member_email_1 = member_custom.get('12')
+                member_email_2 = member_custom.get('14')
+        
         # Parse contacts from custom_data
         contacts = []
         if 'custom_data' in data:
             for contact_num in ['1', '2']:
                 if contact_num in data['custom_data']:
                     contact_data = data['custom_data'][contact_num]
+                    # Skip if contact_data is not a dict (e.g., empty list)
+                    if not isinstance(contact_data, dict):
+                        continue
                     contact = Contact(
                         first_name=contact_data.get('2', ''),
                         last_name=contact_data.get('3', ''),
@@ -117,6 +141,8 @@ class Member:
             section_id=data['section_id'],
             joined=joined,
             started=started,
+            member_email_1=member_email_1,
+            member_email_2=member_email_2,
             contacts=contacts
         )
 
@@ -172,7 +198,11 @@ class Section:
         return emails
     
     def get_young_leaders_emails(self) -> set:
-        """Get email addresses of young leaders (<18)."""
+        """Get email addresses of young leaders (<18) and their parents.
+        
+        This includes all email addresses from the young leader's contact records,
+        which typically includes both parent emails and the young leader's own email.
+        """
         emails = set()
         for member in self.members:
             if member.is_young_leader:
