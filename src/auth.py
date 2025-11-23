@@ -24,12 +24,23 @@ def get_oauth_client():
     return GoogleOAuth2(CLIENT_ID, CLIENT_SECRET)
 
 
-async def get_authorization_url(client, redirect_uri):
-    """Get the authorization URL."""
+async def get_authorization_url(client, redirect_uri, prompt="select_account"):
+    """Get the authorization URL.
+    
+    Args:
+        client: OAuth client
+        redirect_uri: Redirect URI
+        prompt: Google OAuth prompt parameter
+            - "select_account": Show account picker (default for login button)
+            - "none": Silent auth, no UI (for checking if already logged in)
+    """
     authorization_url = await client.get_authorization_url(
         redirect_uri,
         scope=["email", "profile"],
-        extras_params={"hd": AUTHORIZED_DOMAIN}  # Restrict to domain
+        extras_params={
+            "hd": AUTHORIZED_DOMAIN,  # Restrict to domain
+            "prompt": prompt
+        }
     )
     return authorization_url
 
@@ -270,6 +281,17 @@ def require_authentication():
     
     # Handle OAuth callback first if present
     code = st.query_params.get("code")
+    error = st.query_params.get("error")
+    
+    # Handle silent auth failure
+    if error == "interaction_required":
+        # Silent auth failed - user not logged into Google
+        # Clear error and show login button
+        st.query_params.clear()
+        st.session_state['silent_auth_attempted'] = True
+        st.session_state['authenticated'] = False
+    
+    # Process OAuth callback if code present
     if code and not st.session_state.get('authenticated'):
         handle_oauth_callback()
         # After callback processing, check again
@@ -278,6 +300,33 @@ def require_authentication():
     if st.session_state.get('authenticated'):
         # User is authenticated - clear any leftover query params
         if st.query_params.get("code"):
+            st.query_params.clear()
+            st.rerun()
+        return st.session_state.get('user_email')
+    
+    # Not authenticated - try silent auth first (if not already tried)
+    if not st.session_state.get('silent_auth_attempted') and not code and not error:
+        # Attempt silent authentication
+        st.session_state['silent_auth_attempted'] = True
+        
+        client = get_oauth_client()
+        redirect_uri = REDIRECT_URI
+        if os.getenv('K_SERVICE'):
+            redirect_uri = os.getenv('CLOUD_RUN_URL', REDIRECT_URI)
+        
+        # Redirect to Google OAuth with prompt=none
+        # This will silently succeed if user is logged into Google,
+        # or return error=interaction_required if not
+        authorization_url = asyncio.run(
+            get_authorization_url(client, redirect_uri, prompt="none")
+        )
+        st.markdown(f'<meta http-equiv="refresh" content="0;url={authorization_url}">', 
+                   unsafe_allow_html=True)
+        st.stop()
+    
+    # Show login page
+    show_login_button()
+    st.stop()
             st.query_params.clear()
             st.rerun()
         return st.session_state.get('user_email')
@@ -309,8 +358,8 @@ def logout():
             # Log error but continue with logout
             print(f"Error revoking token: {e}")
     
-    # Delete authentication keys explicitly
-    auth_keys = ['authenticated', 'user_email', 'user_name', 'access_token', '_oauth_code_processed']
+    # Delete authentication keys explicitly (including silent_auth_attempted)
+    auth_keys = ['authenticated', 'user_email', 'user_name', 'access_token', '_oauth_code_processed', 'silent_auth_attempted']
     for key in auth_keys:
         if key in st.session_state:
             del st.session_state[key]
