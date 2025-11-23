@@ -254,6 +254,15 @@ def require_authentication():
     Returns:
         User email if authenticated, otherwise shows login page and stops execution.
     """
+    # Check if user is already authenticated FIRST
+    # This allows skipping the landing page when already logged in
+    if st.session_state.get('authenticated'):
+        # Clear any leftover query parameters from OAuth flow
+        query_params = st.query_params
+        if "code" in query_params:
+            st.query_params.clear()
+        return st.session_state.get('user_email')
+    
     # Check if there's an OAuth callback in progress
     query_params = st.query_params
     if "code" in query_params:
@@ -262,10 +271,6 @@ def require_authentication():
         # After handling callback, check authentication again
         if st.session_state.get('authenticated'):
             return st.session_state.get('user_email')
-    
-    # Check if user is already authenticated
-    if st.session_state.get('authenticated'):
-        return st.session_state.get('user_email')
     
     # Show login page
     show_login_button()
@@ -279,9 +284,14 @@ def get_authenticated_user():
 
 def logout():
     """Log out the current user."""
-    # Clear all session state
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-    # Clear query parameters
+    # Clear query parameters first
     st.query_params.clear()
+    
+    # Clear all session state keys one by one
+    # Use list() to avoid dictionary size change during iteration
+    keys_to_delete = list(st.session_state.keys())
+    for key in keys_to_delete:
+        del st.session_state[key]
+    
+    # Force a rerun to show login page
     st.rerun()
