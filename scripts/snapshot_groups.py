@@ -3,10 +3,16 @@ Snapshot current state of Google Groups before live testing.
 Records all members in each group so we can revert if needed.
 """
 import json
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
-from src.gsuite_sync.groups_api import GoogleGroupsManager
-from src.config_manager import get_config_manager
+
+# Add project root to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from gsuite_sync.groups_api import GoogleGroupsManager
+from config_manager import get_config_manager
 
 def snapshot_groups():
     """Take a snapshot of all current group memberships."""
