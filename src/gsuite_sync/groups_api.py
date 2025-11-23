@@ -95,6 +95,11 @@ class GoogleGroupsManager:
                 sa_email = creds.service_account_email
                 print(f'Service account: {sa_email}')
                 
+                # Refresh credentials to ensure we have a valid token
+                if not creds.valid:
+                    print('Refreshing credentials...')
+                    creds.refresh(Request())
+                
                 # Use IAM Credentials API to create delegated credentials
                 from google.auth import impersonated_credentials
                 
@@ -134,12 +139,17 @@ class GoogleGroupsManager:
                             session = AuthorizedSession(self._source_credentials)
                             url = f'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/{self._service_account_email}:signBlob'
                             
+                            print(f'Calling signBlob API for: {self._service_account_email}')
+                            print(f'URL: {url}')
+                            
                             body = {
                                 'payload': base64.b64encode(message).decode('utf-8')
                             }
                             
                             response = session.post(url, json=body)
                             if response.status_code != 200:
+                                print(f'signBlob failed with status {response.status_code}')
+                                print(f'Response: {response.text}')
                                 raise ValueError(f'Sign failed: {response.text}')
                             
                             return base64.b64decode(response.json()['signedBlob'])
