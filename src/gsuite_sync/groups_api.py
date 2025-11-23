@@ -18,6 +18,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+import google.auth
 
 # If modifying these scopes, delete the file token.pickle
 SCOPES = ['https://www.googleapis.com/auth/admin.directory.group']
@@ -44,9 +45,22 @@ class GoogleGroupsManager:
         self._authenticate()
     
     def _authenticate(self):
-        """Authenticate with Google API using OAuth 2.0."""
+        """Authenticate with Google API using OAuth 2.0 or Application Default Credentials."""
         creds = None
         
+        # Try Application Default Credentials first (for Cloud Run / GCE)
+        if os.getenv('USE_CLOUD_CONFIG') == 'true' or os.getenv('GOOGLE_APPLICATION_CREDENTIALS'):
+            try:
+                print('Attempting authentication with Application Default Credentials...')
+                creds, project = google.auth.default(scopes=SCOPES)
+                self.service = build('admin', 'directory_v1', credentials=creds)
+                print('Successfully authenticated with Google Workspace Admin SDK (ADC)')
+                return
+            except Exception as e:
+                print(f'Application Default Credentials not available: {e}')
+                print('Falling back to OAuth flow...')
+        
+        # Fall back to OAuth for local development
         # Load existing token
         if os.path.exists(TOKEN_FILE):
             with open(TOKEN_FILE, 'rb') as token:
