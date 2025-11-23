@@ -12,6 +12,7 @@ Setup:
 
 import os
 import pickle
+import yaml
 from typing import Set, List, Optional
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -19,6 +20,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import google.auth
+from google.oauth2 import service_account
 
 # If modifying these scopes, delete the file token.pickle
 SCOPES = ['https://www.googleapis.com/auth/admin.directory.group']
@@ -44,20 +46,60 @@ class GoogleGroupsManager:
         self.service = None
         self._authenticate()
     
+    def _load_google_config(self) -> dict:
+        """Load google_config from Secret Manager or local file."""
+        if os.getenv('USE_CLOUD_CONFIG') == 'true':
+            from google.cloud import secretmanager
+            client = secretmanager.SecretManagerServiceClient()
+            project_id = os.getenv('GCP_PROJECT_ID')
+            if not project_id:
+                raise ValueError('GCP_PROJECT_ID environment variable not set')
+            secret_name = f"projects/{project_id}/secrets/google-config/versions/latest"
+            response = client.access_secret_version(request={"name": secret_name})
+            config_yaml = response.payload.data.decode('UTF-8')
+            return yaml.safe_load(config_yaml)
+        else:
+            with open('config/google_config.yaml', 'r') as f:
+                return yaml.safe_load(f)
+    
     def _authenticate(self):
-        """Authenticate with Google API using OAuth 2.0 or Application Default Credentials."""
+        """Authenticate with Google API using OAuth 2.0 or Service Account with delegation."""
         creds = None
         
-        # Try Application Default Credentials first (for Cloud Run / GCE)
-        if os.getenv('USE_CLOUD_CONFIG') == 'true' or os.getenv('GOOGLE_APPLICATION_CREDENTIALS'):
+        # Try Service Account with domain-wide delegation (for Cloud Run / GCE)
+        if os.getenv('USE_CLOUD_CONFIG') == 'true':
             try:
-                print('Attempting authentication with Application Default Credentials...')
+                print('Attempting authentication with Service Account (domain-wide delegation)...')
+                
+                # Load google_config to get admin email for subject delegation
+                config = self._load_google_config()
+                admin_email = config.get('service_account_subject')
+                
+                if not admin_email:
+                    raise ValueError(
+                        'service_account_subject not set in google_config. '
+                        'Service account needs to impersonate an admin user for domain-wide delegation.'
+                    )
+                
+                # Get default service account credentials
                 creds, project = google.auth.default(scopes=SCOPES)
+                
+                # Delegate to admin user (required for Admin SDK)
+                if hasattr(creds, 'with_subject'):
+                    creds = creds.with_subject(admin_email)
+                    print(f'Delegating to admin user: {admin_email}')
+                else:
+                    # For Compute Engine default service account, we need to use service_account.Credentials
+                    print('Using service account with subject delegation...')
+                    creds = service_account.Credentials.from_service_account_info(
+                        {}, scopes=SCOPES, subject=admin_email
+                    )
+                
                 self.service = build('admin', 'directory_v1', credentials=creds)
-                print('Successfully authenticated with Google Workspace Admin SDK (ADC)')
+                print('Successfully authenticated with Google Workspace Admin SDK (Service Account)')
                 return
             except Exception as e:
-                print(f'Application Default Credentials not available: {e}')
+                print(f'Service Account authentication failed: {e}')
                 print('Falling back to OAuth flow...')
         
         # Fall back to OAuth for local development
