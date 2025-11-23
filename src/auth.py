@@ -41,33 +41,33 @@ async def get_access_token(client, redirect_uri, code):
 
 
 async def get_user_info(client, token):
-    """Get user information from Google."""
+    """Get user information from Google including name and email."""
+    import base64
+    import json
+    
     try:
-        # The token is an OAuth2Token object with access_token, id_token, etc.
-        # We need to pass it correctly to get_id_email
-        user_id, user_email = await client.get_id_email(token["access_token"])
-        return user_id, user_email
-    except Exception as e:
-        # Fallback: decode the id_token JWT to get email
-        import base64
-        import json
-        try:
-            # Get id_token from the OAuth2Token object
-            id_token = token.get("id_token")
-            if id_token:
-                # Decode JWT (format: header.payload.signature)
-                payload = id_token.split('.')[1]
-                # Add padding if needed
-                payload += '=' * (4 - len(payload) % 4)
-                decoded = base64.urlsafe_b64decode(payload)
-                token_data = json.loads(decoded)
-                user_email = token_data.get("email")
-                user_id = token_data.get("sub")
-                if user_email and user_id:
-                    return user_id, user_email
-        except Exception as decode_error:
-            st.error(f"Failed to decode id_token: {decode_error}")
+        # Decode the id_token JWT to get user info
+        id_token = token.get("id_token")
+        if id_token:
+            # Decode JWT (format: header.payload.signature)
+            payload = id_token.split('.')[1]
+            # Add padding if needed
+            payload += '=' * (4 - len(payload) % 4)
+            decoded = base64.urlsafe_b64decode(payload)
+            token_data = json.loads(decoded)
+            
+            user_email = token_data.get("email")
+            user_id = token_data.get("sub")
+            user_name = token_data.get("name")  # Full name from Google
+            
+            if user_email and user_id:
+                return user_id, user_email, user_name
         
+        # Fallback: try the client method
+        user_id, user_email = await client.get_id_email(token["access_token"])
+        return user_id, user_email, None
+        
+    except Exception as e:
         st.error(f"Error retrieving user info: {e}")
         raise
 
@@ -209,19 +209,21 @@ def handle_oauth_callback():
                 # Exchange code for token
                 token = asyncio.run(get_access_token(client, redirect_uri, code))
                 
-                # Get user info
-                user_id, user_email = asyncio.run(get_user_info(client, token))
+                # Get user info (now includes name)
+                user_id, user_email, user_name = asyncio.run(get_user_info(client, token))
                 
                 # Check authorization
                 if check_user_authorization(user_email):
                     # Store in session state
                     st.session_state['authenticated'] = True
                     st.session_state['user_email'] = user_email
+                    st.session_state['user_name'] = user_name or user_email.split('@')[0]
                     st.session_state['access_token'] = token
                     
                     # Clear the code from URL
                     st.query_params.clear()
-                    st.success(f"✅ Signed in as {user_email}")
+                    display_name = user_name or user_email
+                    st.success(f"✅ Signed in as {display_name}")
                     st.rerun()
                 else:
                     st.query_params.clear()  # Clear code even on failure

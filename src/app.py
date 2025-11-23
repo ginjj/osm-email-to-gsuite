@@ -60,8 +60,9 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configuration")
         
-        # Show logged in user
-        st.info(f"👤 Signed in as: **{user_email}**")
+        # Show logged in user with display name
+        user_name = st.session_state.get('user_name', user_email.split('@')[0])
+        st.info(f"👤 Signed in as: **{user_name}**")
         if st.button("🚪 Sign Out"):
             auth.logout()
         
