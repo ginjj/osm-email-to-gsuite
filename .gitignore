@@ -31,9 +31,10 @@ output/*
 !TEMPLATE-caf_export.csv
 
 # User Configuration files
-osm_config.yaml
-email_config.yaml
-google_config.yaml
+config/osm_config.yaml
+config/email_config.yaml
+config/google_config.yaml
+config/*.backup
 
 # Google credentials and tokens
 google_credentials.json

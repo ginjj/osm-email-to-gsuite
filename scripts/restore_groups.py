@@ -4,7 +4,12 @@ Usage: python restore_groups.py <snapshot_file>
 """
 import json
 import sys
+import os
 from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from gsuite_sync.groups_api import GoogleGroupsManager
 from config_manager import get_config_manager
 

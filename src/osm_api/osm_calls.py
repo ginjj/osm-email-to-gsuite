@@ -6,7 +6,7 @@ from typing import List
 from .models import Section, Member, Term
 
 # Get OSM API coniguration 
-with open('osm_config.yaml', 'r') as stream:
+with open('config/osm_config.yaml', 'r') as stream:
     try:
         dictionary = yaml.safe_load(stream)
     except yaml.YAMLError as exc:

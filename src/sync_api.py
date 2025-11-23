@@ -3,8 +3,13 @@ Main synchronization script using Google Workspace Admin SDK.
 Updated to use native Google API instead of GAMADV-XTD3.
 """
 import sys
+import os
 import yaml
 from typing import List, Dict
+
+# Add project root to path for imports  
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from osm_api import osm_calls
 from osm_api.models import Section
 from gsuite_sync import groups_api

@@ -10,9 +10,11 @@ from datetime import datetime
 from io import StringIO
 import sys
 from typing import List, Dict
+import os
+import sys
 
-# Add parent directory to path for imports
-sys.path.insert(0, '.')
+# Add project root to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from osm_api import osm_calls
 from osm_api.models import Section, Member
