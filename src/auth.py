@@ -1,0 +1,242 @@
+"""
+Google OAuth authentication for Streamlit app.
+Based on: https://docs.streamlit.io/develop/tutorials/authentication/google
+"""
+
+import os
+import asyncio
+import streamlit as st
+from httpx_oauth.clients.google import GoogleOAuth2
+
+# OAuth configuration
+AUTHORIZED_DOMAIN = "1stwarleyscouts.org.uk"
+AUTHORIZED_GROUP = "osm-sync-admins@1stwarleyscouts.org.uk"
+
+# Google OAuth client
+# These will be set from environment variables or secrets
+CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8501")
+
+
+def get_oauth_client():
+    """Get Google OAuth2 client."""
+    return GoogleOAuth2(CLIENT_ID, CLIENT_SECRET)
+
+
+async def get_authorization_url(client, redirect_uri):
+    """Get the authorization URL."""
+    authorization_url = await client.get_authorization_url(
+        redirect_uri,
+        scope=["email", "profile"],
+        extras_params={"hd": AUTHORIZED_DOMAIN}  # Restrict to domain
+    )
+    return authorization_url
+
+
+async def get_access_token(client, redirect_uri, code):
+    """Exchange authorization code for access token."""
+    token = await client.get_access_token(code, redirect_uri)
+    return token
+
+
+async def get_user_info(client, token):
+    """Get user information from Google."""
+    user_id, user_email = await client.get_id_email(token)
+    return user_id, user_email
+
+
+def check_user_authorization(user_email: str) -> bool:
+    """
+    Check if user is authorized by verifying Google Group membership.
+    
+    Args:
+        user_email: The authenticated user's email
+        
+    Returns:
+        True if authorized, False otherwise
+    """
+    if not user_email:
+        return False
+    
+    # Check domain
+    if not user_email.endswith(f"@{AUTHORIZED_DOMAIN}"):
+        return False
+    
+    # In production, check Google Group membership
+    if os.getenv('K_SERVICE'):  # Running in Cloud Run
+        try:
+            from gsuite_sync import groups_api
+            manager = groups_api.GoogleGroupsManager(domain=AUTHORIZED_DOMAIN, dry_run=True)
+            members = manager.get_group_members(AUTHORIZED_GROUP)
+            return user_email.lower() in [m.lower() for m in members]
+        except Exception as e:
+            st.error(f"Error checking authorization: {e}")
+            return False
+    
+    # In development, allow all domain users
+    return True
+
+
+def show_login_button():
+    """Show the Google Sign-In button and handle authentication."""
+    st.title("🔐 Sign In with Google")
+    
+    st.markdown("""
+    ### Welcome to the OSM to Google Workspace Sync Tool
+    
+    This application is restricted to authorized members of **1st Warley Scouts**.
+    
+    Please sign in with your Google Workspace account to continue.
+    """)
+    
+    # Check if we have OAuth credentials configured
+    if not CLIENT_ID or not CLIENT_SECRET:
+        st.error("""
+        ❌ **OAuth not configured**
+        
+        The application needs Google OAuth credentials to be set up.
+        Please contact the administrator.
+        """)
+        st.stop()
+    
+    client = get_oauth_client()
+    
+    # Get authorization URL
+    redirect_uri = REDIRECT_URI
+    if os.getenv('K_SERVICE'):  # In Cloud Run
+        # Use the actual Cloud Run URL
+        redirect_uri = os.getenv('CLOUD_RUN_URL', REDIRECT_URI)
+    
+    # Create authorization URL
+    authorization_url = asyncio.run(
+        get_authorization_url(client, redirect_uri)
+    )
+    
+    # Show sign-in button
+    st.markdown(f"""
+    <div style='text-align: center; padding: 30px;'>
+        <a href="{authorization_url}" target="_self">
+            <button style='
+                background-color: #4285f4;
+                color: white;
+                padding: 15px 30px;
+                font-size: 18px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+            '>
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
+                     width="20" height="20" style="background: white; padding: 2px; border-radius: 2px;">
+                Sign in with Google
+            </button>
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    with st.expander("ℹ️ Troubleshooting & Help"):
+        st.markdown(f"""
+        #### Requirements:
+        
+        - You must have a **@{AUTHORIZED_DOMAIN}** email account
+        - Your account must be in the **{AUTHORIZED_GROUP}** group
+        - You must sign in with your Workspace account (not personal Gmail)
+        
+        #### Common Issues:
+        
+        **Sign-in doesn't work:**
+        - Make sure pop-ups are not blocked
+        - Try in an incognito/private window
+        - Clear your browser cache and cookies
+        
+        **"Access Denied" after sign-in:**
+        - Contact an administrator to be added to: `{AUTHORIZED_GROUP}`
+        - Changes may take a few minutes to take effect
+        
+        **For Administrators:**
+        - Manage access via Google Admin Console
+        - Add/remove users from the `{AUTHORIZED_GROUP}` group
+        """)
+
+
+def handle_oauth_callback():
+    """Handle the OAuth callback and authenticate the user."""
+    # Get the authorization code from URL parameters
+    query_params = st.query_params
+    
+    if "code" in query_params:
+        code = query_params["code"]
+        
+        client = get_oauth_client()
+        redirect_uri = REDIRECT_URI
+        if os.getenv('K_SERVICE'):
+            redirect_uri = os.getenv('CLOUD_RUN_URL', REDIRECT_URI)
+        
+        try:
+            # Exchange code for token
+            token = asyncio.run(get_access_token(client, redirect_uri, code))
+            
+            # Get user info
+            user_id, user_email = asyncio.run(get_user_info(client, token))
+            
+            # Check authorization
+            if check_user_authorization(user_email):
+                # Store in session state
+                st.session_state['authenticated'] = True
+                st.session_state['user_email'] = user_email
+                st.session_state['access_token'] = token
+                
+                # Clear the code from URL
+                st.query_params.clear()
+                st.rerun()
+            else:
+                st.error(f"""
+                ❌ **Access Denied**
+                
+                Your email address ({user_email}) is not authorized to access this application.
+                
+                **To gain access:**
+                - Contact an administrator
+                - Ask to be added to the `{AUTHORIZED_GROUP}` Google Group
+                - Try signing in again after being added
+                """)
+                st.stop()
+                
+        except Exception as e:
+            st.error(f"Authentication error: {e}")
+            st.stop()
+
+
+def require_authentication():
+    """
+    Require user to be authenticated. Call this at the start of your app.
+    
+    Returns:
+        User email if authenticated, otherwise shows login page and stops execution.
+    """
+    # Handle OAuth callback if present
+    handle_oauth_callback()
+    
+    # Check if user is already authenticated
+    if st.session_state.get('authenticated'):
+        return st.session_state.get('user_email')
+    
+    # Show login page
+    show_login_button()
+    st.stop()
+
+
+def get_authenticated_user():
+    """Get the currently authenticated user's email."""
+    return st.session_state.get('user_email')
+
+
+def logout():
+    """Log out the current user."""
+    st.session_state.clear()
+    st.rerun()

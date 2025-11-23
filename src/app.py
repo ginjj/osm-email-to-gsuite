@@ -9,7 +9,7 @@ import pandas as pd
 from datetime import datetime
 from io import StringIO
 import sys
-from typing import List, Dict, Optional
+from typing import List, Dict
 import os
 import sys
 
@@ -20,10 +20,7 @@ from osm_api import osm_calls
 from osm_api.models import Section, Member
 from gsuite_sync import groups_api
 from config_manager import get_config_manager
-
-# Authentication configuration
-AUTHORIZED_GROUP = "osm-sync-admins@1stwarleyscouts.org.uk"
-AUTHORIZED_DOMAIN = "1stwarleyscouts.org.uk"
+import auth
 
 
 # Page configuration
@@ -182,11 +179,8 @@ def load_configs():
 
 def main():
     """Main application."""
-    # Check authentication first
-    user_email = check_authentication()
-    if not user_email:
-        show_login_page()
-        return
+    # Require Google OAuth authentication
+    user_email = auth.require_authentication()
     
     st.title("🏕️ OSM to Google Workspace Sync")
     st.markdown("---")
@@ -198,8 +192,7 @@ def main():
         # Show logged in user
         st.info(f"👤 Signed in as: **{user_email}**")
         if st.button("🚪 Sign Out"):
-            del st.session_state['user_email']
-            st.rerun()
+            auth.logout()
         
         st.markdown("---")
         
