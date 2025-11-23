@@ -83,11 +83,10 @@ def main():
         )
     
     # Main tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "📊 Dashboard",
         "🔄 Sync to Google",
-        "⚙️ Configuration",
-        "� Export to CSV"
+        "⚙️ Configuration"
     ])
     
     # Tab 1: Dashboard
@@ -101,10 +100,6 @@ def main():
     # Tab 3: Configuration
     with tab3:
         show_config_page(email_config)
-    
-    # Tab 4: Export to CSV
-    with tab4:
-        show_export_page(email_config)
 
 
 def show_dashboard(email_config):
@@ -134,19 +129,15 @@ def show_dashboard(email_config):
     # Quick actions
     st.markdown("---")
     st.subheader("Quick Actions")
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     
     with col1:
         if st.button("🔄 Sync All Sections", width='stretch'):
             st.info("Navigate to 'Sync to Google' tab to perform sync")
     
     with col2:
-        if st.button("📥 Export Members", width='stretch'):
-            st.info("Navigate to 'Export to CSV' tab to export data")
-    
-    with col3:
-        if st.button("📈 View Attendance", width='stretch'):
-            st.info("Navigate to 'Attendance History' tab")
+        if st.button("⚙️ Manage Configuration", width='stretch'):
+            st.info("Navigate to 'Configuration' tab to manage sections")
 
 
 
@@ -303,83 +294,6 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
         
     except Exception as e:
         st.error(f"❌ Error during sync: {e}")
-
-
-def show_export_page(email_config):
-    """Display CSV export page."""
-    st.header("📥 Export Members to CSV")
-    
-    st.markdown("""
-    Export current term members with contact details to a CSV file.
-    """)
-    
-    if st.button("📥 Export Current Members", type="primary"):
-        with st.spinner("Exporting members..."):
-            try:
-                sections = osm_calls.get_sections()
-                terms = osm_calls.get_terms(sections)
-                
-                # Prepare data
-                all_members_data = []
-                
-                for i, section in enumerate(sections):
-                    if i < len(terms):
-                        section.current_term = terms[i]
-                        section.members = osm_calls.get_members(
-                            section.sectionid,
-                            section.current_term.termid
-                        )
-                        
-                        # Find email prefix
-                        email_prefix = None
-                        for config in email_config['sections']:
-                            if config['id'] == section.sectionid:
-                                email_prefix = config['email']
-                                break
-                        
-                        # Convert members to rows
-                        for member in section.members:
-                            row = {
-                                'section_name': email_prefix or section.sectionname,
-                                'member_id': member.member_id,
-                                'first_name': member.first_name,
-                                'last_name': member.last_name,
-                                'date_of_birth': member.date_of_birth.isoformat(),
-                                'patrol': member.patrol,
-                                'joined': member.joined.isoformat() if member.joined else '',
-                                'started': member.started.isoformat() if member.started else '',
-                            }
-                            
-                            # Add contact information
-                            for idx, contact in enumerate(member.contacts[:2], 1):
-                                row[f'contact_{idx}_first_name'] = contact.first_name
-                                row[f'contact_{idx}_last_name'] = contact.last_name
-                                row[f'contact_{idx}_email_1'] = contact.email_1 or ''
-                                row[f'contact_{idx}_email_2'] = contact.email_2 or ''
-                            
-                            all_members_data.append(row)
-                
-                # Create DataFrame
-                df = pd.DataFrame(all_members_data)
-                
-                # Display preview
-                st.subheader("Preview")
-                st.dataframe(df.head(10), width='stretch')
-                
-                # Download button
-                csv = df.to_csv(index=False)
-                timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-                st.download_button(
-                    label="⬇️ Download CSV",
-                    data=csv,
-                    file_name=f"osm_members_{timestamp}.csv",
-                    mime="text/csv"
-                )
-                
-                st.success(f"✅ Exported {len(df)} members from {len(sections)} sections")
-                
-            except Exception as e:
-                st.error(f"Error exporting: {e}")
 
 
 def show_config_page(email_config):
