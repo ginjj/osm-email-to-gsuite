@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from osm_api import osm_calls
 from osm_api.models import Section
 from gsuite_sync import groups_api
+from sync_logger import get_logger, SyncStatus
 
 
 def main():
@@ -122,13 +123,89 @@ def process_section(section: Section, manager: groups_api.GoogleGroupsManager):
     print(f'  Young Leaders (<18): {len(young_leaders_emails)} emails')
     print(f'  Parents: {len(parents_emails)} emails')
     
+    # Get logger instance
+    logger = get_logger()
+    
     # Sync each group using Google Workspace Admin SDK
+    # Leaders group
     try:
-        manager.sync_group(section.get_group_name('leaders'), leaders_emails)
-        manager.sync_group(section.get_group_name('youngleaders'), young_leaders_emails)
-        manager.sync_group(section.get_group_name('parents'), parents_emails)
+        group_name = section.get_group_name('leaders')
+        result = manager.sync_group(group_name, leaders_emails)
+        logger.log_sync(
+            section_id=section.sectionid,
+            section_name=section.sectionname,
+            group_type='leaders',
+            group_email=group_name,
+            status=SyncStatus.SUCCESS,
+            members_added=set(result.get('added_emails', [])),
+            members_removed=set(result.get('removed_emails', [])),
+            dry_run=manager.dry_run
+        )
     except Exception as e:
-        print(f'Error syncing groups for {section.sectionname}: {e}')
+        print(f'❌ Error syncing leaders group for {section.sectionname}: {e}')
+        logger.log_sync(
+            section_id=section.sectionid,
+            section_name=section.sectionname,
+            group_type='leaders',
+            group_email=section.get_group_name('leaders'),
+            status=SyncStatus.ERROR,
+            error_message=str(e),
+            dry_run=manager.dry_run
+        )
+        raise
+    
+    # Young leaders group
+    try:
+        group_name = section.get_group_name('youngleaders')
+        result = manager.sync_group(group_name, young_leaders_emails)
+        logger.log_sync(
+            section_id=section.sectionid,
+            section_name=section.sectionname,
+            group_type='young_leaders',
+            group_email=group_name,
+            status=SyncStatus.SUCCESS,
+            members_added=set(result.get('added_emails', [])),
+            members_removed=set(result.get('removed_emails', [])),
+            dry_run=manager.dry_run
+        )
+    except Exception as e:
+        print(f'❌ Error syncing young leaders group for {section.sectionname}: {e}')
+        logger.log_sync(
+            section_id=section.sectionid,
+            section_name=section.sectionname,
+            group_type='young_leaders',
+            group_email=section.get_group_name('youngleaders'),
+            status=SyncStatus.ERROR,
+            error_message=str(e),
+            dry_run=manager.dry_run
+        )
+        raise
+    
+    # Parents group
+    try:
+        group_name = section.get_group_name('parents')
+        result = manager.sync_group(group_name, parents_emails)
+        logger.log_sync(
+            section_id=section.sectionid,
+            section_name=section.sectionname,
+            group_type='parents',
+            group_email=group_name,
+            status=SyncStatus.SUCCESS,
+            members_added=set(result.get('added_emails', [])),
+            members_removed=set(result.get('removed_emails', [])),
+            dry_run=manager.dry_run
+        )
+    except Exception as e:
+        print(f'❌ Error syncing parents group for {section.sectionname}: {e}')
+        logger.log_sync(
+            section_id=section.sectionid,
+            section_name=section.sectionname,
+            group_type='parents',
+            group_email=section.get_group_name('parents'),
+            status=SyncStatus.ERROR,
+            error_message=str(e),
+            dry_run=manager.dry_run
+        )
         raise
 
 

@@ -45,7 +45,11 @@ def _load_config():
     else:
         # Use local file (development mode)
         print("Loading OSM config from local file")
-        config_path = 'config/osm_config.yaml'
+        
+        # Get path relative to project root, not current working directory
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        config_path = os.path.join(project_root, 'config', 'osm_config.yaml')
+        
         if not os.path.exists(config_path):
             raise FileNotFoundError(
                 f"Config file not found: {config_path}\n"

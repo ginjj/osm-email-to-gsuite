@@ -99,7 +99,9 @@ class ConfigManager:
             return self._load_yaml_from_string(yaml_content)
         else:
             # Load from local file
-            with open('config/email_config.yaml', 'r') as f:
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            config_path = os.path.join(project_root, 'config', 'email_config.yaml')
+            with open(config_path, 'r') as f:
                 return yaml.safe_load(f)
     
     def save_email_config(self, config: Dict) -> None:
@@ -117,7 +119,9 @@ class ConfigManager:
             blob.upload_from_string(yaml_content, content_type='text/yaml')
         else:
             # Save to local file
-            with open('config/email_config.yaml', 'w') as f:
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            config_path = os.path.join(project_root, 'config', 'email_config.yaml')
+            with open(config_path, 'w') as f:
                 f.write(yaml_content)
     
     def load_all_configs(self) -> Tuple[Dict, Dict, Dict, Optional[str]]:

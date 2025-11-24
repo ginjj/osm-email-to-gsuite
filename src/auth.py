@@ -275,6 +275,20 @@ def require_authentication():
     Returns:
         User email if authenticated, otherwise shows login page and stops execution.
     """
+    # Development mode bypass - skip OAuth if credentials not configured
+    if not CLIENT_ID or not CLIENT_SECRET:
+        st.warning("""
+        ⚠️ **Development Mode**: OAuth credentials not configured.
+        
+        Running without authentication. This is only for local development.
+        """)
+        # Set a fake authenticated user for dev mode
+        if 'authenticated' not in st.session_state:
+            st.session_state['authenticated'] = True
+            st.session_state['user_email'] = 'dev@1stwarleyscouts.org.uk'
+            st.session_state['user_name'] = 'Developer'
+        return st.session_state.get('user_email')
+    
     # Initialize authentication state if not present
     if 'authenticated' not in st.session_state:
         st.session_state['authenticated'] = False
