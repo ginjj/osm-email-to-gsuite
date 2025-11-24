@@ -569,11 +569,16 @@ def _display_sync_run(run: List):
     sections = sorted(set(l.section_name for l in run))
     section_count = len(sections)
     
+    # Check trigger source
+    triggered_by = getattr(first_log, 'triggered_by', 'manual')
+    trigger_icon = "🔄" if triggered_by == "scheduler" else "👤"
+    trigger_label = " 🔄 (Scheduled)" if triggered_by == "scheduler" else ""
+    
     # Create summary
     dry_run_label = " 🔍 (Dry Run)" if first_log.dry_run else ""
     summary = (f"{run_status_icon} **{run_timestamp_str}** - "
                f"{len(run)} groups - {section_count} sections - "
-               f"➕{total_added} ➖{total_removed}{dry_run_label}")
+               f"➕{total_added} ➖{total_removed}{dry_run_label}{trigger_label}")
     
     with st.expander(summary):
         # Run overview
