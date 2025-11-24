@@ -374,6 +374,11 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
         status_text.empty()
         progress_bar.empty()
         
+        # Store sync completion time in session state for log filtering
+        from datetime import datetime
+        st.session_state['last_sync_time'] = datetime.now()
+        st.session_state['last_synced_sections'] = [section_options[name] for name in selected_sections]
+        
         # Display summary
         st.success(f"✅ Sync completed successfully!")
         
@@ -381,6 +386,12 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
         col1.metric("📧 Groups Synced", len(all_results))
         col2.metric("➕ Total Added", total_added)
         col3.metric("➖ Total Removed", total_removed)
+        
+        # Add button to view logs
+        st.info("💡 **Tip**: Go to the Logs tab to see detailed sync history")
+        if st.button("📜 View Sync Logs", key="view_logs_after_sync"):
+            st.session_state['active_tab'] = 'Logs'
+            st.rerun()
         
     except Exception as e:
         st.error(f"❌ Error during sync: {e}")
@@ -453,25 +464,32 @@ def show_logs_page():
         st.info("📭 No sync logs found yet. Logs will appear here after running syncs.")
         return
     
-    # Group logs by sync run (within 2 minutes = same run)
+    # Group logs by sync run (within 2 minutes = same run AND same dry_run value)
     from collections import defaultdict
     runs = []
     current_run = []
     last_timestamp = None
+    last_dry_run = None
     
     for log in logs:
         timestamp = datetime.fromisoformat(log.timestamp.replace('Z', '+00:00'))
         
-        if last_timestamp is None or (last_timestamp - timestamp).total_seconds() <= 120:
-            # Same run (within 2 minutes)
-            current_run.append(log)
-        else:
+        # Start a new run if:
+        # 1. More than 2 minutes have passed, OR
+        # 2. dry_run flag changed (dry run vs real run)
+        if (last_timestamp is None or 
+            (last_timestamp - timestamp).total_seconds() > 120 or
+            last_dry_run != log.dry_run):
             # New run
             if current_run:
                 runs.append(current_run)
             current_run = [log]
+        else:
+            # Same run (within 2 minutes AND same dry_run value)
+            current_run.append(log)
         
         last_timestamp = timestamp
+        last_dry_run = log.dry_run
     
     # Add the last run
     if current_run:
