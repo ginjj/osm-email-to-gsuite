@@ -25,9 +25,11 @@ from google.oauth2 import service_account
 # If modifying these scopes, delete the file token.pickle
 SCOPES = ['https://www.googleapis.com/auth/admin.directory.group']
 
-# Configuration
-CREDENTIALS_FILE = 'google_credentials.json'
-TOKEN_FILE = 'token.pickle'
+# Configuration - use absolute paths relative to project root
+import os
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CREDENTIALS_FILE = os.path.join(_PROJECT_ROOT, 'google_credentials.json')
+TOKEN_FILE = os.path.join(_PROJECT_ROOT, 'token.pickle')
 
 
 class GoogleGroupsManager:
@@ -59,7 +61,8 @@ class GoogleGroupsManager:
             config_yaml = response.payload.data.decode('UTF-8')
             return yaml.safe_load(config_yaml)
         else:
-            with open('config/google_config.yaml', 'r') as f:
+            config_path = os.path.join(_PROJECT_ROOT, 'config', 'google_config.yaml')
+            with open(config_path, 'r') as f:
                 return yaml.safe_load(f)
     
     def _authenticate(self):
@@ -172,14 +175,25 @@ class GoogleGroupsManager:
                     # Create signer
                     signer = IAMSigner(creds, sa_email)
                     
+                    # Create service account info dict with required fields
+                    # This mimics the structure from a service account JSON file
+                    service_account_info = {
+                        'type': 'service_account',
+                        'token_uri': 'https://oauth2.googleapis.com/token',
+                        'client_email': sa_email,
+                        'project_id': project or 'unknown'
+                    }
+                    
                     # Create service account credentials with delegation
-                    delegated_creds = service_account.Credentials(
-                        signer=signer,
-                        service_account_email=sa_email,
-                        token_uri='https://oauth2.googleapis.com/token',
+                    # Use from_service_account_info to properly initialize all fields
+                    delegated_creds = service_account.Credentials.from_service_account_info(
+                        service_account_info,
                         scopes=SCOPES,
                         subject=admin_email  # This enables domain-wide delegation
                     )
+                    
+                    # Replace the signer with our custom IAM signer
+                    delegated_creds = delegated_creds.with_signer(signer)
                     
                     creds = delegated_creds
                     print(f'Created delegated credentials for {admin_email}')
@@ -194,35 +208,39 @@ class GoogleGroupsManager:
             print('Successfully authenticated with Google Workspace Admin SDK (Service Account)')
             return
         
-        # Fall back to OAuth for local development
-        # Load existing token
-        if os.path.exists(TOKEN_FILE):
-            with open(TOKEN_FILE, 'rb') as token:
-                creds = pickle.load(token)
+        # Local development - use service account JSON file
+        print('Local development mode: using service account JSON file...')
         
-        # If no valid credentials, get new ones
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                print('Refreshing Google API credentials...')
-                creds.refresh(Request())
-            else:
-                if not os.path.exists(CREDENTIALS_FILE):
-                    raise FileNotFoundError(
-                        f'{CREDENTIALS_FILE} not found. '
-                        'Please download OAuth 2.0 credentials from Google Cloud Console.'
-                    )
-                print('Authenticating with Google API (browser will open)...')
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    CREDENTIALS_FILE, SCOPES
-                )
-                creds = flow.run_local_server(port=0)
-            
-            # Save credentials for next run
-            with open(TOKEN_FILE, 'wb') as token:
-                pickle.dump(creds, token)
+        if not os.path.exists(CREDENTIALS_FILE):
+            raise FileNotFoundError(
+                f'{CREDENTIALS_FILE} not found. '
+                f'Please download service account JSON file from Google Cloud Console '
+                f'and save it as {CREDENTIALS_FILE}'
+            )
+        
+        # Load google_config to get admin email for delegation
+        config = self._load_google_config()
+        admin_email = config.get('service_account_subject')
+        
+        if not admin_email:
+            raise ValueError(
+                'service_account_subject not set in config/google_config.yaml. '
+                'Service account needs to impersonate an admin user for domain-wide delegation. '
+                'Example: service_account_subject: osm-sync@1stwarleyscouts.org.uk'
+            )
+        
+        print(f'Loading service account from {CREDENTIALS_FILE}...')
+        print(f'Will delegate to admin user: {admin_email}')
+        
+        # Load service account credentials with domain-wide delegation
+        creds = service_account.Credentials.from_service_account_file(
+            CREDENTIALS_FILE,
+            scopes=SCOPES,
+            subject=admin_email  # Enable domain-wide delegation
+        )
         
         self.service = build('admin', 'directory_v1', credentials=creds)
-        print('Successfully authenticated with Google Workspace Admin SDK')
+        print('✅ Successfully authenticated with Google Workspace Admin SDK (Service Account)')
     
     def get_group(self, group_email: str) -> Optional[dict]:
         """
