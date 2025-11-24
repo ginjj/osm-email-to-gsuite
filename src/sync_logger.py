@@ -123,6 +123,7 @@ class SyncLogger:
         """Write log entry to Cloud Storage."""
         try:
             from google.cloud import storage
+            import streamlit as st
             
             client = storage.Client()
             bucket = client.bucket(self.bucket_name)
@@ -138,10 +139,24 @@ class SyncLogger:
                 content_type='application/json'
             )
             
-            print(f"✅ Logged sync to Cloud Storage: {filename}")
+            # Log to both stdout (Cloud Run logs) and Streamlit (if available)
+            log_message = f"✅ Logged sync to Cloud Storage: {filename} (dry_run={entry.dry_run})"
+            print(log_message)
+            try:
+                st.info(log_message)
+            except:
+                pass  # Streamlit not available or not in main thread
             
         except Exception as e:
-            print(f"❌ Error writing log to Cloud Storage: {e}")
+            error_message = f"❌ Error writing log to Cloud Storage: {type(e).__name__}: {e}"
+            print(error_message)
+            import traceback
+            print(traceback.format_exc())
+            try:
+                import streamlit as st
+                st.error(error_message)
+            except:
+                pass  # Streamlit not available or not in main thread
             # Don't fail the sync if logging fails
     
     def _write_to_local_file(self, entry: SyncLogEntry):
@@ -155,10 +170,24 @@ class SyncLogger:
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(entry.to_dict(), f, indent=2)
             
-            print(f"✅ Logged sync to local file: {filepath}")
+            log_message = f"✅ Logged sync to local file: {filepath} (dry_run={entry.dry_run})"
+            print(log_message)
+            try:
+                import streamlit as st
+                st.info(log_message)
+            except:
+                pass  # Streamlit not available or not in main thread
             
         except Exception as e:
-            print(f"❌ Error writing log to local file: {e}")
+            error_message = f"❌ Error writing log to local file: {type(e).__name__}: {e}"
+            print(error_message)
+            import traceback
+            print(traceback.format_exc())
+            try:
+                import streamlit as st
+                st.error(error_message)
+            except:
+                pass  # Streamlit not available or not in main thread
             # Don't fail the sync if logging fails
     
     def get_recent_logs(self, limit: int = 100) -> List[SyncLogEntry]:
