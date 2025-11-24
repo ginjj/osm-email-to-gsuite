@@ -632,11 +632,16 @@ def _display_sync_run(run: List):
     trigger_icon = "🔄" if triggered_by == "scheduler" else "👤"
     trigger_label = " 🔄 (Scheduled)" if triggered_by == "scheduler" else ""
     
-    # Create summary
-    dry_run_label = " 🔍 (Dry Run)" if first_log.dry_run else ""
+    # Dry run label (all logs in run should have same dry_run value since grouped by sync_run_id)
+    dry_run_label = " 🔍 (Dry Run)" if first_log.dry_run else " ▶️ (Real Sync)"
+    
+    # Show sync_run_id for debugging
+    sync_run_id = getattr(first_log, 'sync_run_id', None)
+    run_id_label = f" [ID: {sync_run_id[:16]}...]" if sync_run_id else ""
+    
     summary = (f"{run_status_icon} **{run_timestamp_str}** - "
                f"{len(run)} groups - {section_count} sections - "
-               f"➕{total_added} ➖{total_removed}{dry_run_label}{trigger_label}")
+               f"➕{total_added} ➖{total_removed}{dry_run_label}{trigger_label}{run_id_label}")
     
     with st.expander(summary):
         # Run overview
