@@ -178,25 +178,15 @@ class GoogleGroupsManager:
                     # Create signer
                     signer = IAMSigner(creds, sa_email)
                     
-                    # Create service account info dict with required fields
-                    # This mimics the structure from a service account JSON file
-                    service_account_info = {
-                        'type': 'service_account',
-                        'token_uri': 'https://oauth2.googleapis.com/token',
-                        'client_email': sa_email,
-                        'project_id': project or 'unknown'
-                    }
-                    
-                    # Create service account credentials with delegation
-                    # Use from_service_account_info to properly initialize all fields
-                    delegated_creds = service_account.Credentials.from_service_account_info(
-                        service_account_info,
+                    # Create service account credentials directly with our custom signer
+                    # Don't use from_service_account_info() as it requires private_key
+                    delegated_creds = service_account.Credentials(
+                        signer=signer,
+                        service_account_email=sa_email,
+                        token_uri='https://oauth2.googleapis.com/token',
                         scopes=SCOPES,
                         subject=admin_email  # This enables domain-wide delegation
                     )
-                    
-                    # Replace the signer with our custom IAM signer
-                    delegated_creds = delegated_creds.with_signer(signer)
                     
                     creds = delegated_creds
                     print(f'Created delegated credentials for {admin_email}')
