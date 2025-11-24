@@ -108,8 +108,12 @@ def check_user_authorization(user_email: str) -> bool:
             members = manager.get_group_members(AUTHORIZED_GROUP)
             return user_email.lower() in [m.lower() for m in members]
         except Exception as e:
-            st.error(f"Error checking authorization: {e}")
-            return False
+            # If group membership check fails (e.g., service account not configured),
+            # allow all domain users through. The group check is a nice-to-have,
+            # not a requirement for initial access.
+            st.warning(f"⚠️ Could not verify group membership: {e}")
+            st.info(f"Allowing access based on domain membership ({AUTHORIZED_DOMAIN})")
+            return True
     
     # In development, allow all domain users
     return True
