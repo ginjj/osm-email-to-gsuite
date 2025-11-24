@@ -20,6 +20,7 @@ from osm_api import osm_calls
 from osm_api.models import Section, Member
 from gsuite_sync import groups_api
 from config_manager import get_config_manager
+from sync_logger import get_logger, SyncStatus
 import auth
 
 
@@ -105,9 +106,10 @@ def main():
         )
     
     # Main tabs
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📊 Dashboard",
         "🔄 Sync to Google",
+        "📜 Logs",
         "⚙️ Configuration"
     ])
     
@@ -119,8 +121,12 @@ def main():
     with tab2:
         show_sync_page(email_config, domain, dry_run)
     
-    # Tab 3: Configuration
+    # Tab 3: Logs
     with tab3:
+        show_logs_page()
+    
+    # Tab 4: Configuration
+    with tab4:
         show_config_page(email_config)
 
 
@@ -224,6 +230,9 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
     total_removed = 0
     all_results = []
     
+    # Get logger
+    logger = get_logger()
+    
     try:
         manager = groups_api.GoogleGroupsManager(domain=domain, dry_run=dry_run)
         
@@ -254,10 +263,83 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
             col3.metric("Young Leader Emails", len(young_leaders))
             col4.metric("Parent Emails", len(parents))
             
-            # Sync groups and collect results
-            leaders_result = manager.sync_group(section.get_group_name('leaders'), leaders)
-            young_leaders_result = manager.sync_group(section.get_group_name('youngleaders'), young_leaders)
-            parents_result = manager.sync_group(section.get_group_name('parents'), parents)
+            # Sync groups and collect results - Leaders
+            try:
+                leaders_result = manager.sync_group(section.get_group_name('leaders'), leaders)
+                logger.log_sync(
+                    section_id=section.sectionid,
+                    section_name=section.sectionname,
+                    group_type='leaders',
+                    group_email=leaders_result['group_email'],
+                    status=SyncStatus.SUCCESS,
+                    members_added=set(leaders_result['added_emails']),
+                    members_removed=set(leaders_result['removed_emails']),
+                    dry_run=dry_run
+                )
+            except Exception as e:
+                st.error(f"❌ Error syncing leaders: {e}")
+                logger.log_sync(
+                    section_id=section.sectionid,
+                    section_name=section.sectionname,
+                    group_type='leaders',
+                    group_email=section.get_group_name('leaders'),
+                    status=SyncStatus.ERROR,
+                    error_message=str(e),
+                    dry_run=dry_run
+                )
+                raise
+            
+            # Young Leaders
+            try:
+                young_leaders_result = manager.sync_group(section.get_group_name('youngleaders'), young_leaders)
+                logger.log_sync(
+                    section_id=section.sectionid,
+                    section_name=section.sectionname,
+                    group_type='young_leaders',
+                    group_email=young_leaders_result['group_email'],
+                    status=SyncStatus.SUCCESS,
+                    members_added=set(young_leaders_result['added_emails']),
+                    members_removed=set(young_leaders_result['removed_emails']),
+                    dry_run=dry_run
+                )
+            except Exception as e:
+                st.error(f"❌ Error syncing young leaders: {e}")
+                logger.log_sync(
+                    section_id=section.sectionid,
+                    section_name=section.sectionname,
+                    group_type='young_leaders',
+                    group_email=section.get_group_name('youngleaders'),
+                    status=SyncStatus.ERROR,
+                    error_message=str(e),
+                    dry_run=dry_run
+                )
+                raise
+            
+            # Parents
+            try:
+                parents_result = manager.sync_group(section.get_group_name('parents'), parents)
+                logger.log_sync(
+                    section_id=section.sectionid,
+                    section_name=section.sectionname,
+                    group_type='parents',
+                    group_email=parents_result['group_email'],
+                    status=SyncStatus.SUCCESS,
+                    members_added=set(parents_result['added_emails']),
+                    members_removed=set(parents_result['removed_emails']),
+                    dry_run=dry_run
+                )
+            except Exception as e:
+                st.error(f"❌ Error syncing parents: {e}")
+                logger.log_sync(
+                    section_id=section.sectionid,
+                    section_name=section.sectionname,
+                    group_type='parents',
+                    group_email=section.get_group_name('parents'),
+                    status=SyncStatus.ERROR,
+                    error_message=str(e),
+                    dry_run=dry_run
+                )
+                raise
             
             # Display sync results for each group
             for result in [leaders_result, young_leaders_result, parents_result]:
@@ -302,6 +384,343 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
         
     except Exception as e:
         st.error(f"❌ Error during sync: {e}")
+
+
+def show_logs_page():
+    """Display sync logs with filtering and search."""
+    st.header("📜 Sync Logs")
+    st.markdown("View history of all sync operations with detailed change tracking.")
+    
+    # Email notification configuration
+    st.markdown("---")
+    st.subheader("📧 Email Notifications")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        notification_email = st.text_input(
+            "Notification Email (for failures)",
+            value=st.session_state.get('notification_email', ''),
+            help="Email address to receive notifications when syncs fail"
+        )
+    with col2:
+        st.write("")  # Spacing
+        st.write("")  # Spacing
+        if st.button("💾 Save Email"):
+            st.session_state['notification_email'] = notification_email
+            st.success("✅ Notification email saved!")
+    
+    if notification_email:
+        st.info(f"📧 Failure notifications will be sent to: **{notification_email}**")
+    else:
+        st.warning("⚠️ No notification email configured. You won't receive alerts for sync failures.")
+    
+    st.markdown("---")
+    
+    # Fetch logs
+    if st.button("🔄 Refresh Logs"):
+        st.session_state['logs_loaded'] = False
+    
+    if 'logs_loaded' not in st.session_state or not st.session_state['logs_loaded']:
+        with st.spinner("Loading sync logs..."):
+            try:
+                logger = get_logger()
+                logs = logger.get_recent_logs(limit=200)
+                st.session_state['sync_logs'] = logs
+                st.session_state['logs_loaded'] = True
+                st.success(f"✅ Loaded {len(logs)} log entries")
+            except Exception as e:
+                st.error(f"❌ Error loading logs: {e}")
+                return
+    
+    if 'sync_logs' not in st.session_state:
+        st.info("👆 Click 'Refresh Logs' to load sync history")
+        return
+    
+    logs = st.session_state['sync_logs']
+    
+    if not logs:
+        st.info("📭 No sync logs found yet. Logs will appear here after running syncs.")
+        return
+    
+    # Group logs by sync run (within 2 minutes = same run)
+    from collections import defaultdict
+    runs = []
+    current_run = []
+    last_timestamp = None
+    
+    for log in logs:
+        timestamp = datetime.fromisoformat(log.timestamp.replace('Z', '+00:00'))
+        
+        if last_timestamp is None or (last_timestamp - timestamp).total_seconds() <= 120:
+            # Same run (within 2 minutes)
+            current_run.append(log)
+        else:
+            # New run
+            if current_run:
+                runs.append(current_run)
+            current_run = [log]
+        
+        last_timestamp = timestamp
+    
+    # Add the last run
+    if current_run:
+        runs.append(current_run)
+    
+    # Filters
+    st.subheader("🔍 Filters")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Status filter
+        status_options = ['All'] + [status.value for status in SyncStatus]
+        status_filter = st.selectbox("Status", options=status_options)
+    
+    with col2:
+        # Show all entries toggle
+        show_all = st.checkbox("Show individual log entries", value=False,
+                               help="Show all entries instead of grouping by sync run")
+    
+    # Apply status filter to runs
+    filtered_runs = []
+    for run in runs:
+        filtered_run = run
+        if status_filter != 'All':
+            filtered_run = [log for log in run if log.status == status_filter]
+        if filtered_run:
+            filtered_runs.append(filtered_run)
+    
+    # Flatten for statistics
+    all_filtered_logs = [log for run in filtered_runs for log in run]
+    
+    st.markdown("---")
+    
+    # Summary statistics
+    st.subheader("📊 Summary")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    success_count = len([l for l in all_filtered_logs if l.status == SyncStatus.SUCCESS.value])
+    error_count = len([l for l in all_filtered_logs if l.status == SyncStatus.ERROR.value])
+    total_added = sum(l.members_added for l in all_filtered_logs)
+    total_removed = sum(l.members_removed for l in all_filtered_logs)
+    
+    col1.metric("✅ Successful", success_count)
+    col2.metric("❌ Errors", error_count)
+    col3.metric("➕ Total Added", total_added)
+    col4.metric("➖ Total Removed", total_removed)
+    
+    st.markdown("---")
+    
+    # Display logs
+    if show_all:
+        # Original flat view
+        st.subheader(f"📋 Log Entries ({len(all_filtered_logs)})")
+        
+        if not all_filtered_logs:
+            st.info("No logs match the selected filters.")
+            return
+        
+        for log in all_filtered_logs:
+            _display_log_entry(log)
+    else:
+        # Grouped by sync run
+        st.subheader(f"📋 Sync Runs ({len(filtered_runs)})")
+        
+        if not filtered_runs:
+            st.info("No sync runs match the selected filters.")
+            return
+        
+        for run in filtered_runs:
+            _display_sync_run(run)
+
+
+def _display_sync_run(run: List):
+    """Display a grouped sync run with expandable details."""
+    # Calculate run summary
+    first_log = run[0]
+    run_timestamp = datetime.fromisoformat(first_log.timestamp.replace('Z', '+00:00'))
+    run_timestamp_str = run_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Count statuses
+    success_count = len([l for l in run if l.status == SyncStatus.SUCCESS.value])
+    error_count = len([l for l in run if l.status == SyncStatus.ERROR.value])
+    warning_count = len([l for l in run if l.status == SyncStatus.WARNING.value])
+    
+    # Overall run status
+    if error_count > 0:
+        run_status_icon = "❌"
+        run_status_color = "red"
+        run_status = "ERRORS"
+    elif warning_count > 0:
+        run_status_icon = "⚠️"
+        run_status_color = "orange"
+        run_status = "WARNINGS"
+    else:
+        run_status_icon = "✅"
+        run_status_color = "green"
+        run_status = "SUCCESS"
+    
+    # Count changes
+    total_added = sum(l.members_added for l in run)
+    total_removed = sum(l.members_removed for l in run)
+    
+    # Sections synced
+    sections = sorted(set(l.section_name for l in run))
+    sections_str = ", ".join(sections)
+    
+    # Create summary
+    dry_run_label = " 🔍 (Dry Run)" if first_log.dry_run else ""
+    summary = (f"{run_status_icon} **{run_timestamp_str}** - {len(run)} groups - "
+               f"{sections_str} - "
+               f"➕{total_added} ➖{total_removed}{dry_run_label}")
+    
+    with st.expander(summary):
+        # Run overview
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.write(f"**Status:** :{run_status_color}[{run_status}]")
+            st.write(f"**Groups Synced:** {len(run)}")
+            if first_log.dry_run:
+                st.write("**Mode:** 🔍 Dry Run")
+        
+        with col2:
+            st.write(f"**Sections:** {len(sections)}")
+            st.write(f"**✅ Success:** {success_count}")
+            if error_count > 0:
+                st.write(f"**❌ Errors:** {error_count}")
+        
+        with col3:
+            st.write(f"**➕ Added:** {total_added}")
+            st.write(f"**➖ Removed:** {total_removed}")
+        
+        st.markdown("---")
+        
+        # Individual log entries
+        st.markdown("**Individual Groups:**")
+        
+        for log in run:
+            _display_log_entry_compact(log)
+
+
+def _display_log_entry_compact(log):
+    """Display a compact log entry within a sync run."""
+    # Determine status icon and color
+    if log.status == SyncStatus.SUCCESS.value:
+        status_icon = "✅"
+        status_color = "green"
+    elif log.status == SyncStatus.ERROR.value:
+        status_icon = "❌"
+        status_color = "red"
+    else:
+        status_icon = "⚠️"
+        status_color = "orange"
+    
+    # Create compact summary
+    changes_str = ""
+    if log.members_added > 0 or log.members_removed > 0:
+        changes_str = f" (➕{log.members_added} ➖{log.members_removed})"
+    
+    summary = f"{status_icon} **{log.section_name}** - {log.group_type}{changes_str}"
+    
+    with st.expander(summary, expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write(f"**Group:** {log.group_email}")
+            st.write(f"**Status:** :{status_color}[{log.status.upper()}]")
+        
+        with col2:
+            st.write(f"**Added:** {log.members_added}")
+            st.write(f"**Removed:** {log.members_removed}")
+        
+        # Show changes if any
+        if log.added_emails or log.removed_emails:
+            changes_col1, changes_col2 = st.columns(2)
+            
+            with changes_col1:
+                if log.added_emails:
+                    st.markdown("**➕ Added:**")
+                    for email in log.added_emails:
+                        st.text(f"  • {email}")
+            
+            with changes_col2:
+                if log.removed_emails:
+                    st.markdown("**➖ Removed:**")
+                    for email in log.removed_emails:
+                        st.text(f"  • {email}")
+        
+        # Show error message if any
+        if log.error_message:
+            st.error(f"**Error:** {log.error_message}")
+
+
+def _display_log_entry(log):
+    """Display a full individual log entry (for flat view)."""
+    # Determine status icon and color
+    if log.status == SyncStatus.SUCCESS.value:
+        status_icon = "✅"
+        status_color = "green"
+    elif log.status == SyncStatus.ERROR.value:
+        status_icon = "❌"
+        status_color = "red"
+    else:
+        status_icon = "⚠️"
+        status_color = "orange"
+    
+    # Format timestamp
+    timestamp = datetime.fromisoformat(log.timestamp.replace('Z', '+00:00'))
+    timestamp_str = timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')
+    
+    # Create expander with summary
+    summary = f"{status_icon} **{log.section_name}** - {log.group_type} - {timestamp_str}"
+    if log.dry_run:
+        summary += " 🔍 (Dry Run)"
+    
+    with st.expander(summary):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write(f"**Section:** {log.section_name} ({log.section_id})")
+            st.write(f"**Group:** {log.group_email}")
+            st.write(f"**Type:** {log.group_type}")
+            st.write(f"**Status:** :{status_color}[{log.status.upper()}]")
+            if log.dry_run:
+                st.write("**Mode:** 🔍 Dry Run")
+        
+        with col2:
+            st.write(f"**Timestamp:** {timestamp_str}")
+            st.write(f"**Members Added:** {log.members_added}")
+            st.write(f"**Members Removed:** {log.members_removed}")
+        
+        # Show changes if any
+        if log.added_emails or log.removed_emails:
+            st.markdown("**Changes:**")
+            
+            changes_col1, changes_col2 = st.columns(2)
+            
+            with changes_col1:
+                if log.added_emails:
+                    st.markdown("**➕ Added:**")
+                    for email in log.added_emails:
+                        st.text(f"  • {email}")
+                else:
+                    st.markdown("**➕ Added:** _(none)_")
+            
+            with changes_col2:
+                if log.removed_emails:
+                    st.markdown("**➖ Removed:**")
+                    for email in log.removed_emails:
+                        st.text(f"  • {email}")
+                else:
+                    st.markdown("**➖ Removed:** _(none)_")
+        else:
+            st.info("No changes made - group was already in sync")
+        
+        # Show error message if any
+        if log.error_message:
+            st.error(f"**Error:** {log.error_message}")
 
 
 def show_config_page(email_config):
