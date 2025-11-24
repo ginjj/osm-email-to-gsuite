@@ -208,39 +208,52 @@ class GoogleGroupsManager:
             print('Successfully authenticated with Google Workspace Admin SDK (Service Account)')
             return
         
-        # Local development - use service account JSON file
-        print('Local development mode: using service account JSON file...')
+        # Local development - use OAuth 2.0 (cached in token.pickle)
+        print('Local development mode: using OAuth 2.0 credentials...')
         
-        if not os.path.exists(CREDENTIALS_FILE):
-            raise FileNotFoundError(
-                f'{CREDENTIALS_FILE} not found. '
-                f'Please download service account JSON file from Google Cloud Console '
-                f'and save it as {CREDENTIALS_FILE}'
-            )
+        # Check for cached credentials
+        if os.path.exists(TOKEN_FILE):
+            print(f'Loading cached credentials from {TOKEN_FILE}...')
+            with open(TOKEN_FILE, 'rb') as token:
+                creds = pickle.load(token)
         
-        # Load google_config to get admin email for delegation
-        config = self._load_google_config()
-        admin_email = config.get('service_account_subject')
-        
-        if not admin_email:
-            raise ValueError(
-                'service_account_subject not set in config/google_config.yaml. '
-                'Service account needs to impersonate an admin user for domain-wide delegation. '
-                'Example: service_account_subject: osm-sync@1stwarleyscouts.org.uk'
-            )
-        
-        print(f'Loading service account from {CREDENTIALS_FILE}...')
-        print(f'Will delegate to admin user: {admin_email}')
-        
-        # Load service account credentials with domain-wide delegation
-        creds = service_account.Credentials.from_service_account_file(
-            CREDENTIALS_FILE,
-            scopes=SCOPES,
-            subject=admin_email  # Enable domain-wide delegation
-        )
+        # If there are no (valid) credentials available, let the user log in
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                print('Token expired, attempting to refresh...')
+                try:
+                    creds.refresh(Request())
+                    print('✅ Token refreshed successfully')
+                except Exception as e:
+                    print(f'❌ Token refresh failed: {e}')
+                    print(f'Deleting {TOKEN_FILE} and re-authenticating...')
+                    if os.path.exists(TOKEN_FILE):
+                        os.remove(TOKEN_FILE)
+                    creds = None
+            
+            if not creds:
+                if not os.path.exists(CREDENTIALS_FILE):
+                    raise FileNotFoundError(
+                        f'{CREDENTIALS_FILE} not found. '
+                        f'Please download OAuth 2.0 credentials from Google Cloud Console '
+                        f'and save it as {CREDENTIALS_FILE}'
+                    )
+                
+                print(f'Authenticating with Google API using {CREDENTIALS_FILE}...')
+                print('Browser will open for authentication...')
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    CREDENTIALS_FILE, SCOPES)
+                creds = flow.run_local_server(port=0)
+                
+                # Save the credentials for the next run
+                with open(TOKEN_FILE, 'wb') as token:
+                    pickle.dump(creds, token)
+                print(f'✅ Credentials saved to {TOKEN_FILE}')
+        else:
+            print('Using valid cached credentials')
         
         self.service = build('admin', 'directory_v1', credentials=creds)
-        print('✅ Successfully authenticated with Google Workspace Admin SDK (Service Account)')
+        print('Successfully authenticated with Google Workspace Admin SDK')
     
     def get_group(self, group_email: str) -> Optional[dict]:
         """
