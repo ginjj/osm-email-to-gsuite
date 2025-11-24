@@ -230,6 +230,10 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
     total_removed = 0
     all_results = []
     
+    # Generate unique sync run ID for this sync button press
+    from datetime import datetime
+    sync_run_id = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+    
     # Get logger
     logger = get_logger()
     
@@ -274,7 +278,8 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
                     status=SyncStatus.SUCCESS,
                     members_added=set(leaders_result['added_emails']),
                     members_removed=set(leaders_result['removed_emails']),
-                    dry_run=dry_run
+                    dry_run=dry_run,
+                    sync_run_id=sync_run_id
                 )
             except Exception as e:
                 st.error(f"❌ Error syncing leaders: {e}")
@@ -285,7 +290,8 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
                     group_email=section.get_group_name('leaders'),
                     status=SyncStatus.ERROR,
                     error_message=str(e),
-                    dry_run=dry_run
+                    dry_run=dry_run,
+                    sync_run_id=sync_run_id
                 )
                 raise
             
@@ -300,7 +306,8 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
                     status=SyncStatus.SUCCESS,
                     members_added=set(young_leaders_result['added_emails']),
                     members_removed=set(young_leaders_result['removed_emails']),
-                    dry_run=dry_run
+                    dry_run=dry_run,
+                    sync_run_id=sync_run_id
                 )
             except Exception as e:
                 st.error(f"❌ Error syncing young leaders: {e}")
@@ -311,7 +318,8 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
                     group_email=section.get_group_name('youngleaders'),
                     status=SyncStatus.ERROR,
                     error_message=str(e),
-                    dry_run=dry_run
+                    dry_run=dry_run,
+                    sync_run_id=sync_run_id
                 )
                 raise
             
@@ -326,7 +334,8 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
                     status=SyncStatus.SUCCESS,
                     members_added=set(parents_result['added_emails']),
                     members_removed=set(parents_result['removed_emails']),
-                    dry_run=dry_run
+                    dry_run=dry_run,
+                    sync_run_id=sync_run_id
                 )
             except Exception as e:
                 st.error(f"❌ Error syncing parents: {e}")
@@ -337,7 +346,8 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
                     group_email=section.get_group_name('parents'),
                     status=SyncStatus.ERROR,
                     error_message=str(e),
-                    dry_run=dry_run
+                    dry_run=dry_run,
+                    sync_run_id=sync_run_id
                 )
                 raise
             
@@ -464,36 +474,26 @@ def show_logs_page():
         st.info("📭 No sync logs found yet. Logs will appear here after running syncs.")
         return
     
-    # Group logs by sync run (within 2 minutes = same run AND same dry_run value)
+    # Group logs by sync run ID (each sync button press gets unique ID)
     from collections import defaultdict
-    runs = []
-    current_run = []
-    last_timestamp = None
-    last_dry_run = None
+    runs_dict = defaultdict(list)
     
     for log in logs:
-        timestamp = datetime.fromisoformat(log.timestamp.replace('Z', '+00:00'))
-        
-        # Start a new run if:
-        # 1. More than 2 minutes have passed, OR
-        # 2. dry_run flag changed (dry run vs real run)
-        if (last_timestamp is None or 
-            (last_timestamp - timestamp).total_seconds() > 120 or
-            last_dry_run != log.dry_run):
-            # New run
-            if current_run:
-                runs.append(current_run)
-            current_run = [log]
+        # Group by sync_run_id if available, otherwise fall back to timestamp-based grouping
+        run_id = getattr(log, 'sync_run_id', None)
+        if run_id:
+            runs_dict[run_id].append(log)
         else:
-            # Same run (within 2 minutes AND same dry_run value)
-            current_run.append(log)
-        
-        last_timestamp = timestamp
-        last_dry_run = log.dry_run
+            # Legacy logs without sync_run_id - use timestamp as key
+            runs_dict[log.timestamp].append(log)
     
-    # Add the last run
-    if current_run:
-        runs.append(current_run)
+    # Convert to list of runs, sorted by newest first (using first log's timestamp)
+    runs = []
+    for run_id, run_logs in runs_dict.items():
+        runs.append(sorted(run_logs, key=lambda l: l.timestamp, reverse=True))
+    
+    # Sort runs by timestamp of first log in each run
+    runs.sort(key=lambda run: run[0].timestamp, reverse=True)
     
     # Filters
     st.subheader("🔍 Filters")

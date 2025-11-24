@@ -36,6 +36,7 @@ class SyncLogEntry:
     error_message: Optional[str] = None
     dry_run: bool = False
     triggered_by: str = "manual"  # 'manual', 'scheduler', 'api'
+    sync_run_id: Optional[str] = None  # Unique ID for each sync button press
     
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
@@ -72,7 +73,8 @@ class SyncLogger:
         members_removed: Set[str] = None,
         error_message: Optional[str] = None,
         dry_run: bool = False,
-        triggered_by: str = "manual"
+        triggered_by: str = "manual",
+        sync_run_id: Optional[str] = None
     ):
         """
         Log a sync operation.
@@ -88,6 +90,7 @@ class SyncLogger:
             error_message: Error message if status is ERROR
             dry_run: Whether this was a dry run
             triggered_by: Source of sync ('manual', 'scheduler', 'api')
+            sync_run_id: Unique ID for each sync button press
         """
         members_added = members_added or set()
         members_removed = members_removed or set()
@@ -106,7 +109,8 @@ class SyncLogger:
             removed_emails=sorted(list(members_removed)),
             error_message=error_message,
             dry_run=dry_run,
-            triggered_by=triggered_by
+            triggered_by=triggered_by,
+            sync_run_id=sync_run_id
         )
         
         # Write log entry
