@@ -412,6 +412,26 @@ def show_logs_page():
     st.header("📜 Sync Logs")
     st.markdown("View history of all sync operations with detailed change tracking.")
     
+    # Load notification email from Cloud Storage if not in session state
+    if 'notification_email' not in st.session_state:
+        try:
+            if os.getenv('K_SERVICE'):  # Running in Cloud Run
+                from google.cloud import storage
+                client = storage.Client()
+                bucket = client.bucket('osm-sync-config')
+                blob = bucket.blob('notification_email.txt')
+                if blob.exists():
+                    st.session_state['notification_email'] = blob.download_as_string().decode('utf-8').strip()
+            else:
+                # In development, try to load from local file
+                local_email_file = 'notification_email.txt'
+                if os.path.exists(local_email_file):
+                    with open(local_email_file, 'r') as f:
+                        st.session_state['notification_email'] = f.read().strip()
+        except Exception as e:
+            print(f"⚠️ Could not load notification email: {e}")
+            st.session_state['notification_email'] = ''
+    
     # Email notification configuration
     st.markdown("---")
     st.subheader("📧 Email Notifications")
@@ -435,6 +455,10 @@ def show_logs_page():
                     bucket = client.bucket('osm-sync-config')
                     blob = bucket.blob('notification_email.txt')
                     blob.upload_from_string(notification_email)
+                else:
+                    # In development, save to local file
+                    with open('notification_email.txt', 'w') as f:
+                        f.write(notification_email)
                 
                 st.session_state['notification_email'] = notification_email
                 st.success("✅ Notification email saved!")

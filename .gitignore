@@ -41,6 +41,9 @@ google_credentials.json
 service-account-key.json
 token.pickle
 
+# Notification email (local development only)
+notification_email.txt
+
 # IDE
 .idea/
 *.swp
