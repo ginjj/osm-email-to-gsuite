@@ -231,8 +231,13 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
     all_results = []
     
     # Generate unique sync run ID for this sync button press
+    # Include milliseconds and random suffix to ensure uniqueness even for rapid clicks
     from datetime import datetime
-    sync_run_id = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+    import random
+    sync_run_id = datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f') + f"-{random.randint(1000, 9999)}"
+    
+    # Display the sync run ID for debugging
+    st.info(f"🆔 Sync Run ID: `{sync_run_id}` (Dry Run: {dry_run})")
     
     # Get logger
     logger = get_logger()
