@@ -23,7 +23,10 @@ import google.auth
 from google.oauth2 import service_account
 
 # If modifying these scopes, delete the file token.pickle
-SCOPES = ['https://www.googleapis.com/auth/admin.directory.group']
+SCOPES = [
+    'https://www.googleapis.com/auth/admin.directory.group',
+    'https://www.googleapis.com/auth/gmail.send'  # For email notifications
+]
 
 # Configuration - use absolute paths relative to project root
 import os

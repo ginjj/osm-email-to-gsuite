@@ -406,8 +406,19 @@ def show_logs_page():
         st.write("")  # Spacing
         st.write("")  # Spacing
         if st.button("💾 Save Email"):
-            st.session_state['notification_email'] = notification_email
-            st.success("✅ Notification email saved!")
+            try:
+                # Save to Cloud Storage in production
+                if os.getenv('K_SERVICE'):  # Running in Cloud Run
+                    from google.cloud import storage
+                    client = storage.Client()
+                    bucket = client.bucket('osm-sync-config')
+                    blob = bucket.blob('notification_email.txt')
+                    blob.upload_from_string(notification_email)
+                
+                st.session_state['notification_email'] = notification_email
+                st.success("✅ Notification email saved!")
+            except Exception as e:
+                st.error(f"❌ Failed to save: {e}")
     
     if notification_email:
         st.info(f"📧 Failure notifications will be sent to: **{notification_email}**")

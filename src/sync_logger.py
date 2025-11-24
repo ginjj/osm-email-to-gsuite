@@ -114,6 +114,10 @@ class SyncLogger:
             self._write_to_cloud_storage(entry)
         else:
             self._write_to_local_file(entry)
+        
+        # Send email notification on error (only in production)
+        if status == SyncStatus.ERROR and not dry_run and self.use_cloud:
+            self._send_error_notification(entry)
     
     def _write_to_cloud_storage(self, entry: SyncLogEntry):
         """Write log entry to Cloud Storage."""
@@ -230,6 +234,47 @@ class SyncLogger:
         except Exception as e:
             print(f"❌ Error retrieving local logs: {e}")
             return []
+    
+    def _send_error_notification(self, entry: SyncLogEntry):
+        """Send email notification for sync error."""
+        try:
+            # Get notification email from Cloud Storage config
+            from google.cloud import storage
+            
+            client = storage.Client()
+            bucket = client.bucket(self.bucket_name)
+            blob = bucket.blob('notification_email.txt')
+            
+            if not blob.exists():
+                print("No notification email configured - skipping email notification")
+                return
+            
+            notification_email = blob.download_as_text().strip()
+            if not notification_email:
+                print("Empty notification email - skipping email notification")
+                return
+            
+            # Get email notifier
+            from email_notifier import get_email_notifier
+            
+            notifier = get_email_notifier()
+            if not notifier:
+                print("Email notifier not available - skipping email notification")
+                return
+            
+            # Send notification
+            notifier.send_failure_notification(
+                to_email=notification_email,
+                section_name=entry.section_name,
+                group_type=entry.group_type,
+                error_message=entry.error_message or "Unknown error",
+                timestamp=entry.timestamp,
+                triggered_by=entry.triggered_by
+            )
+            
+        except Exception as e:
+            print(f"⚠️ Failed to send error notification email: {e}")
+            # Don't fail the sync if email fails
 
 
 # Global logger instance
