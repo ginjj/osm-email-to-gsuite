@@ -394,6 +394,10 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
         st.session_state['last_sync_time'] = datetime.now()
         st.session_state['last_synced_sections'] = [section_options[name] for name in selected_sections]
         
+        # Invalidate logs cache to force refresh
+        if 'logs_loaded' in st.session_state:
+            st.session_state['logs_loaded'] = False
+        
         # Display summary
         st.success(f"✅ Sync completed successfully!")
         
@@ -402,11 +406,8 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
         col2.metric("➕ Total Added", total_added)
         col3.metric("➖ Total Removed", total_removed)
         
-        # Add button to view logs
-        st.info("💡 **Tip**: Go to the Logs tab to see detailed sync history")
-        if st.button("📜 View Sync Logs", key="view_logs_after_sync"):
-            st.session_state['active_tab'] = 'Logs'
-            st.rerun()
+        # Logs will auto-refresh when user manually visits Logs tab
+        st.info("💡 **Tip**: Visit the Logs tab to see this sync in the history (auto-refreshes)")
         
     except Exception as e:
         st.error(f"❌ Error during sync: {e}")
