@@ -181,22 +181,104 @@ def get_email_notifier() -> Optional[EmailNotifier]:
             print("Warning: No service_account_subject configured for email notifications")
             return None
         
-        # Create credentials with Gmail scope
-        # We'll reuse the groups_api authentication but add Gmail scope
-        manager = groups_api.GoogleGroupsManager(
-            domain=google_config.get('domain'),
-            dry_run=True  # Just for getting credentials
-        )
+        domain = google_config.get('domain')
+        if not domain:
+            print("Warning: No domain configured for email notifications")
+            return None
         
-        # The credentials from GoogleGroupsManager already have the right scopes
-        # (we'll add Gmail scope in the next step)
-        notifier = EmailNotifier(
-            credentials=manager.credentials,
-            sender_email=sender_email
-        )
-        
-        return notifier
+        # Create credentials with Gmail scope (similar to groups_api)
+        # We need to create our own credentials since we need Gmail scope
+        try:
+            from google.auth import default as google_auth_default, credentials as google_credentials
+            from google.auth.transport import requests as google_requests
+            from google.oauth2 import service_account
+            import requests
+            
+            # Get default credentials
+            creds, project_id = google_auth_default(
+                scopes=['https://www.googleapis.com/auth/gmail.send']
+            )
+            
+            # Check if we're using service account (in Cloud Run)
+            if hasattr(creds, 'service_account_email'):
+                # This is a Compute Engine credential, need to get the actual email
+                if creds.service_account_email == 'default':
+                    # Query metadata server for the real email
+                    metadata_url = 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email'
+                    headers = {'Metadata-Flavor': 'Google'}
+                    response = requests.get(metadata_url, headers=headers, timeout=5)
+                    sa_email = response.text
+                else:
+                    sa_email = creds.service_account_email
+                
+                # Create IAM signer for domain-wide delegation
+                from google_auth_httplib2 import AuthorizedHttp
+                import googleapiclient.http
+                
+                class IAMSigner:
+                    """Custom signer that uses IAM Credentials API."""
+                    def __init__(self, credentials, service_account_email):
+                        self._credentials = credentials
+                        self._service_account_email = service_account_email
+                    
+                    @property
+                    def key_id(self):
+                        return None
+                    
+                    def sign(self, message):
+                        # Use IAM Credentials API to sign
+                        import requests
+                        
+                        # Get access token
+                        self._credentials.refresh(google_requests.Request())
+                        access_token = self._credentials.token
+                        
+                        # Call signBlob API
+                        url = f"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/{self._service_account_email}:signBlob"
+                        headers = {
+                            'Authorization': f'Bearer {access_token}',
+                            'Content-Type': 'application/json'
+                        }
+                        payload = {
+                            'payload': base64.b64encode(message).decode('utf-8')
+                        }
+                        
+                        response = requests.post(url, headers=headers, json=payload, timeout=10)
+                        response.raise_for_status()
+                        
+                        signature_b64 = response.json()['signedBlob']
+                        return base64.b64decode(signature_b64)
+                
+                # Create signer
+                signer = IAMSigner(creds, sa_email)
+                
+                # Create service account credentials with delegation
+                delegated_creds = service_account.Credentials(
+                    signer=signer,
+                    service_account_email=sa_email,
+                    token_uri="https://oauth2.googleapis.com/token",
+                    scopes=['https://www.googleapis.com/auth/gmail.send'],
+                    subject=sender_email  # Delegate to this user
+                )
+                
+                creds = delegated_creds
+            
+            # Create email notifier with credentials
+            notifier = EmailNotifier(
+                credentials=creds,
+                sender_email=sender_email
+            )
+            
+            return notifier
+            
+        except Exception as e:
+            print(f"Warning: Could not create credentials for email notifier: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
         
     except Exception as e:
         print(f"Warning: Could not initialize email notifier: {e}")
+        import traceback
+        traceback.print_exc()
         return None
