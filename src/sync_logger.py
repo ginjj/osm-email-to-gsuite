@@ -279,7 +279,7 @@ class SyncLogger:
                 return
             
             # Get email notifier
-            from email_notifier import get_email_notifier
+            from src.email_notifier import get_email_notifier
             
             notifier = get_email_notifier()
             if not notifier:
