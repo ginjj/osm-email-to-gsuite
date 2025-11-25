@@ -423,15 +423,23 @@ def show_logs_page():
     
     st.markdown("---")
     
+    # Initialize pagination state
+    if 'logs_page' not in st.session_state:
+        st.session_state['logs_page'] = 1
+    if 'logs_per_page' not in st.session_state:
+        st.session_state['logs_per_page'] = 50
+    
     # Fetch logs
     if st.button("🔄 Refresh Logs"):
         st.session_state['logs_loaded'] = False
+        st.session_state['logs_page'] = 1  # Reset to first page on refresh
     
     if 'logs_loaded' not in st.session_state or not st.session_state['logs_loaded']:
         with st.spinner("Loading sync logs..."):
             try:
                 logger = get_logger()
-                logs = logger.get_recent_logs(limit=200)
+                # Load more logs initially for pagination
+                logs = logger.get_recent_logs(limit=500)
                 st.session_state['sync_logs'] = logs
                 st.session_state['logs_loaded'] = True
                 st.success(f"✅ Loaded {len(logs)} log entries")
@@ -516,26 +524,81 @@ def show_logs_page():
     
     st.markdown("---")
     
+    # Pagination controls (before display)
+    if show_all:
+        total_items = len(all_filtered_logs)
+        items_name = "entries"
+    else:
+        total_items = len(filtered_runs)
+        items_name = "runs"
+    
+    # Calculate pagination
+    items_per_page = st.session_state['logs_per_page']
+    total_pages = max(1, (total_items + items_per_page - 1) // items_per_page)  # Ceiling division
+    current_page = min(st.session_state['logs_page'], total_pages)  # Ensure valid page
+    
+    # Pagination controls
+    col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
+    
+    with col1:
+        if st.button("⬅️ Previous", disabled=(current_page <= 1)):
+            st.session_state['logs_page'] = max(1, current_page - 1)
+            st.rerun()
+    
+    with col2:
+        st.markdown(f"**Page {current_page} of {total_pages}** ({total_items} {items_name})")
+    
+    with col3:
+        # Items per page selector
+        per_page_options = [10, 25, 50, 100]
+        new_per_page = st.selectbox(
+            "Items per page",
+            options=per_page_options,
+            index=per_page_options.index(items_per_page) if items_per_page in per_page_options else 2,
+            key="per_page_selector"
+        )
+        if new_per_page != items_per_page:
+            st.session_state['logs_per_page'] = new_per_page
+            st.session_state['logs_page'] = 1  # Reset to page 1 when changing page size
+            st.rerun()
+    
+    with col4:
+        if st.button("Next ➡️", disabled=(current_page >= total_pages)):
+            st.session_state['logs_page'] = min(total_pages, current_page + 1)
+            st.rerun()
+    
+    st.markdown("---")
+    
     # Display logs
     if show_all:
-        # Original flat view
+        # Original flat view with pagination
         st.subheader(f"📋 Log Entries ({len(all_filtered_logs)})")
         
         if not all_filtered_logs:
             st.info("No logs match the selected filters.")
             return
         
-        for log in all_filtered_logs:
+        # Calculate slice for current page
+        start_idx = (current_page - 1) * items_per_page
+        end_idx = min(start_idx + items_per_page, len(all_filtered_logs))
+        page_logs = all_filtered_logs[start_idx:end_idx]
+        
+        for log in page_logs:
             _display_log_entry(log)
     else:
-        # Grouped by sync run
+        # Grouped by sync run with pagination
         st.subheader(f"📋 Sync Runs ({len(filtered_runs)})")
         
         if not filtered_runs:
             st.info("No sync runs match the selected filters.")
             return
         
-        for run in filtered_runs:
+        # Calculate slice for current page
+        start_idx = (current_page - 1) * items_per_page
+        end_idx = min(start_idx + items_per_page, len(filtered_runs))
+        page_runs = filtered_runs[start_idx:end_idx]
+        
+        for run in page_runs:
             _display_sync_run(run)
 
 
