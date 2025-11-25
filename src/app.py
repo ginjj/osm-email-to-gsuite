@@ -23,7 +23,7 @@ from osm_api import osm_calls
 from osm_api.models import Section, Member
 from gsuite_sync import groups_api
 from config_manager import get_config_manager
-from sync_logger import get_logger, SyncStatus
+from src.sync_logger import get_logger, SyncStatus
 import auth
 
 
@@ -485,7 +485,7 @@ def show_logs_page():
             with test_result_container:
                 with st.spinner("Sending test email..."):
                     try:
-                        from sync_logger import SyncLogEntry  # Don't re-import SyncStatus
+                        from src.sync_logger import SyncLogEntry  # Don't re-import SyncStatus
                         from datetime import datetime
                         
                         # Create a test log entry
