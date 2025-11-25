@@ -3,6 +3,9 @@ Streamlit web interface for OSM to Google Workspace synchronization.
 Provides a user-friendly web UI for managing sync operations.
 """
 
+# Application version
+__version__ = "1.0.0"
+
 import streamlit as st
 import yaml
 import pandas as pd
@@ -104,6 +107,10 @@ def main():
             value=google_config.get('domain', ''),
             help="Your Google Workspace domain (e.g., example.com)"
         )
+        
+        # Version info at bottom of sidebar
+        st.markdown("---")
+        st.caption(f"🏕️ OSM Sync v{__version__}")
     
     # Main tabs
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -499,8 +506,12 @@ def show_logs_page():
                         )
                         
                         # Send test notification
+                        print("DEBUG: About to get logger...")
                         logger = get_logger()
+                        print(f"DEBUG: Got logger: {logger}")
+                        print("DEBUG: About to call _send_error_notification...")
                         logger._send_error_notification(test_entry)
+                        print("DEBUG: Called _send_error_notification")
                         
                         st.success(f"✅ Test email sent to {notification_email}! Check your inbox.")
                     except Exception as e:
