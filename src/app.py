@@ -479,54 +479,53 @@ def show_logs_page():
         
         # Test email button
         if st.button("📨 Send Test Email"):
-            print("="*80)
-            print("TEST EMAIL BUTTON CLICKED!")
-            print("="*80)
-            # Create a container for the test result (won't be overwritten by log refresh)
-            test_result_container = st.empty()
+            import logging
+            logger_debug = logging.getLogger(__name__)
+            logger_debug.error("=" * 80)
+            logger_debug.error("TEST EMAIL BUTTON CLICKED!")
+            logger_debug.error("=" * 80)
             
-            with test_result_container:
-                with st.spinner("Sending test email..."):
-                    try:
-                        print("DEBUG: Inside try block")
-                        from src.sync_logger import SyncLogEntry  # Don't re-import SyncStatus
-                        from datetime import datetime
-                        print("DEBUG: Imports successful")
-                        
-                        # Create a test log entry
-                        test_entry = SyncLogEntry(
-                            timestamp=datetime.utcnow().isoformat() + 'Z',
-                            section_id='TEST',
-                            section_name='Test Section',
-                            group_email='test@example.com',
-                            group_type='test',
-                            status=SyncStatus.ERROR,  # Use the already-imported SyncStatus
-                            members_added=0,
-                            members_removed=0,
-                            dry_run=False,
-                            added_emails=[],
-                            removed_emails=[],
-                            error_message='This is a test notification to verify email functionality.',
-                            sync_run_id='TEST-' + datetime.utcnow().strftime('%Y%m%d-%H%M%S')
-                        )
-                        print(f"DEBUG: Created test entry: {test_entry}")
-                        
-                        # Send test notification
-                        print("DEBUG: About to get logger...")
-                        logger = get_logger()
-                        print(f"DEBUG: Got logger: {logger}")
-                        print("DEBUG: About to call _send_error_notification...")
-                        logger._send_error_notification(test_entry)
-                        print("DEBUG: Called _send_error_notification")
-                        
-                        st.success(f"✅ Test email sent to {notification_email}! Check your inbox.")
-                    except Exception as e:
-                        print(f"EXCEPTION CAUGHT: {e}")
-                        import traceback
-                        traceback.print_exc()
-                        st.error(f"❌ Failed to send test email: {e}")
-                        with st.expander("Show error details"):
-                            st.code(traceback.format_exc())
+            try:
+                logger_debug.error("DEBUG: Inside try block")
+                from src.sync_logger import SyncLogEntry
+                from datetime import datetime
+                logger_debug.error("DEBUG: Imports successful")
+                
+                # Create a test log entry
+                test_entry = SyncLogEntry(
+                    timestamp=datetime.utcnow().isoformat() + 'Z',
+                    section_id='TEST',
+                    section_name='Test Section',
+                    group_email='test@example.com',
+                    group_type='test',
+                    status=SyncStatus.ERROR,
+                    members_added=0,
+                    members_removed=0,
+                    dry_run=False,
+                    added_emails=[],
+                    removed_emails=[],
+                    error_message='This is a test notification to verify email functionality.',
+                    sync_run_id='TEST-' + datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+                )
+                logger_debug.error(f"DEBUG: Created test entry")
+                
+                # Send test notification
+                logger_debug.error("DEBUG: About to get logger...")
+                sync_logger = get_logger()
+                logger_debug.error(f"DEBUG: Got logger: {sync_logger}")
+                logger_debug.error("DEBUG: About to call _send_error_notification...")
+                sync_logger._send_error_notification(test_entry)
+                logger_debug.error("DEBUG: Called _send_error_notification")
+                
+                st.success(f"✅ Test email sent to {notification_email}! Check your inbox.")
+            except Exception as e:
+                logger_debug.error(f"EXCEPTION CAUGHT: {e}")
+                import traceback
+                logger_debug.error(traceback.format_exc())
+                st.error(f"❌ Failed to send test email: {e}")
+                import traceback
+                with st.expander("Show error details"):
+                    st.code(traceback.format_exc())
     else:
         st.warning("⚠️ No notification email configured. You won't receive alerts for sync failures.")
     
