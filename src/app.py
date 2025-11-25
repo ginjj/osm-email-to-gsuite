@@ -469,6 +469,40 @@ def show_logs_page():
     
     if notification_email:
         st.info(f"📧 Failure notifications will be sent to: **{notification_email}**")
+        
+        # Test email button
+        if st.button("📨 Send Test Email"):
+            with st.spinner("Sending test email..."):
+                try:
+                    from src.sync_logger import SyncLogEntry, SyncStatus
+                    from datetime import datetime
+                    
+                    # Create a test log entry
+                    test_entry = SyncLogEntry(
+                        timestamp=datetime.utcnow().isoformat() + 'Z',
+                        section_id='TEST',
+                        section_name='Test Section',
+                        group_email='test@example.com',
+                        group_type='test',
+                        status=SyncStatus.ERROR,
+                        members_added=0,
+                        members_removed=0,
+                        dry_run=False,
+                        added_emails=[],
+                        removed_emails=[],
+                        error_message='This is a test notification to verify email functionality.',
+                        sync_run_id='TEST-' + datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+                    )
+                    
+                    # Send test notification
+                    logger = get_logger()
+                    logger._send_error_notification(test_entry)
+                    
+                    st.success(f"✅ Test email sent to {notification_email}! Check your inbox.")
+                except Exception as e:
+                    st.error(f"❌ Failed to send test email: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
     else:
         st.warning("⚠️ No notification email configured. You won't receive alerts for sync failures.")
     
