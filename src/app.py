@@ -216,16 +216,9 @@ def show_sync_page(email_config, domain, dry_run):
             default=list(section_options.keys())
         )
         
-        # Container for sync results (so we can clear it on new sync)
-        sync_container = st.container()
-        
         if st.button("🚀 Start Sync", type="primary", disabled=not selected_sections):
-            # Clear previous results by emptying the container
-            sync_container.empty()
-            
-            # Perform sync in the container
-            with sync_container:
-                sync_sections(sections, section_options, selected_sections, domain, dry_run)
+            # Perform sync - button stays at top, output appears below
+            sync_sections(sections, section_options, selected_sections, domain, dry_run)
 
 
 def sync_sections(sections, section_options, selected_sections, domain, dry_run):
@@ -244,9 +237,6 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
     from datetime import datetime
     import random
     sync_run_id = datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f') + f"-{random.randint(1000, 9999)}"
-    
-    # Display the sync run ID for debugging
-    st.info(f"🆔 Sync Run ID: `{sync_run_id}` (Dry Run: {dry_run})")
     
     # Get logger
     logger = get_logger()
