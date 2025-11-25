@@ -118,10 +118,6 @@ class SyncLogger:
             self._write_to_cloud_storage(entry)
         else:
             self._write_to_local_file(entry)
-        
-        # Send email notification on error (only in production)
-        if status == SyncStatus.ERROR and not dry_run and self.use_cloud:
-            self._send_error_notification(entry)
     
     def _write_to_cloud_storage(self, entry: SyncLogEntry):
         """Write log entry to Cloud Storage."""
@@ -258,61 +254,6 @@ class SyncLogger:
         except Exception as e:
             print(f"❌ Error retrieving local logs: {e}")
             return []
-    
-    def _send_error_notification(self, entry: SyncLogEntry):
-        """Send email notification for sync error."""
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error("=== _send_error_notification called ===")
-        
-        try:
-            # Get notification email from Cloud Storage config
-            from google.cloud import storage
-            logger.error("Imported google.cloud.storage")
-            
-            client = storage.Client()
-            bucket = client.bucket(self.bucket_name)
-            blob = bucket.blob('notification_email.txt')
-            logger.error(f"Checking if blob exists: {blob.name}")
-            
-            if not blob.exists():
-                logger.error("No notification email configured - skipping email notification")
-                return
-            
-            notification_email = blob.download_as_text().strip()
-            logger.error(f"Got notification email: {notification_email}")
-            if not notification_email:
-                logger.error("Empty notification email - skipping email notification")
-                return
-            
-            # Get email notifier
-            logger.error("About to import email_notifier")
-            from src.email_notifier import get_email_notifier
-            logger.error("Imported email_notifier")
-            
-            notifier = get_email_notifier()
-            logger.error(f"Got notifier: {notifier}")
-            if not notifier:
-                logger.error("Email notifier not available - skipping email notification")
-                return
-            
-            # Send notification
-            logger.error("About to call send_failure_notification")
-            notifier.send_failure_notification(
-                to_email=notification_email,
-                section_name=entry.section_name,
-                group_type=entry.group_type,
-                error_message=entry.error_message or "Unknown error",
-                timestamp=entry.timestamp,
-                triggered_by=entry.triggered_by
-            )
-            logger.error("Called send_failure_notification successfully")
-            
-        except Exception as e:
-            logger.error(f"⚠️ EXCEPTION in _send_error_notification: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            # Don't fail the sync if email fails
 
 
 # Global logger instance
