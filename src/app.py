@@ -216,12 +216,21 @@ def show_sync_page(email_config, domain, dry_run):
             default=list(section_options.keys())
         )
         
+        # Container for sync results (so we can clear it on new sync)
+        sync_container = st.container()
+        
         if st.button("🚀 Start Sync", type="primary", disabled=not selected_sections):
-            sync_sections(sections, section_options, selected_sections, domain, dry_run)
+            # Clear previous results by emptying the container
+            sync_container.empty()
+            
+            # Perform sync in the container
+            with sync_container:
+                sync_sections(sections, section_options, selected_sections, domain, dry_run)
 
 
 def sync_sections(sections, section_options, selected_sections, domain, dry_run):
     """Perform synchronization for selected sections."""
+    # Create placeholders for progress tracking
     progress_bar = st.progress(0)
     status_text = st.empty()
     
@@ -405,9 +414,6 @@ def sync_sections(sections, section_options, selected_sections, domain, dry_run)
         col1.metric("📧 Groups Synced", len(all_results))
         col2.metric("➕ Total Added", total_added)
         col3.metric("➖ Total Removed", total_removed)
-        
-        # Logs will auto-refresh when user manually visits Logs tab
-        st.info("💡 **Tip**: Visit the Logs tab to see this sync in the history (auto-refreshes)")
         
     except Exception as e:
         st.error(f"❌ Error during sync: {e}")

@@ -143,13 +143,9 @@ class SyncLogger:
                 content_type='application/json'
             )
             
-            # Log to both stdout (Cloud Run logs) and Streamlit (if available)
+            # Log to stdout (Cloud Run logs) - no Streamlit banner
             log_message = f"✅ Logged sync to Cloud Storage: {filename} (dry_run={entry.dry_run})"
             print(log_message)
-            try:
-                st.info(log_message)
-            except:
-                pass  # Streamlit not available or not in main thread
             
         except Exception as e:
             error_message = f"❌ Error writing log to Cloud Storage: {type(e).__name__}: {e}"
@@ -176,11 +172,6 @@ class SyncLogger:
             
             log_message = f"✅ Logged sync to local file: {filepath} (dry_run={entry.dry_run})"
             print(log_message)
-            try:
-                import streamlit as st
-                st.info(log_message)
-            except:
-                pass  # Streamlit not available or not in main thread
             
         except Exception as e:
             error_message = f"❌ Error writing log to local file: {type(e).__name__}: {e}"
