@@ -57,9 +57,15 @@ class EmailNotifier:
         Returns:
             True if email sent successfully, False otherwise
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"=== send_failure_notification called for {to_email} ===")
+        
         try:
+            logger.error(f"Building email for {section_name} - {group_type}")
             # Create email subject
             subject = f"🚨 OSM Sync Failure: {section_name} - {group_type}"
+            logger.error(f"Subject: {subject}")
             
             # Create email body
             body = f"""
@@ -132,18 +138,26 @@ class EmailNotifier:
             
             # Encode message
             raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+            logger.error("Message encoded")
             
             # Send via Gmail API
+            logger.error("Getting Gmail service...")
             service = self._get_gmail_service()
-            service.users().messages().send(
+            logger.error(f"Got Gmail service: {service}")
+            logger.error("About to send email...")
+            result = service.users().messages().send(
                 userId='me',
                 body={'raw': raw_message}
             ).execute()
+            logger.error(f"Email sent! Result: {result}")
             
             print(f"✅ Notification email sent to {to_email}")
             return True
             
         except Exception as e:
+            logger.error(f"❌ EXCEPTION in send_failure_notification: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             print(f"❌ Failed to send notification email: {e}")
             return False
 
