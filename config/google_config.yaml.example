@@ -19,3 +19,24 @@ credentials_file: google_credentials.json
 
 # Token cache file (auto-generated after first OAuth authentication)
 token_file: token.pickle
+
+# Cloud Scheduler Configuration
+scheduler:
+  # Enable or disable automated syncs
+  enabled: true
+  
+  # Schedule in cron format (default: every Monday at 9 AM)
+  # Examples:
+  # - "0 9 * * 1" = Every Monday at 9:00 AM
+  # - "0 9 * * *" = Every day at 9:00 AM
+  # - "0 9 * * 1,4" = Every Monday and Thursday at 9:00 AM
+  # - "0 */6 * * *" = Every 6 hours
+  schedule: "0 9 * * 1"
+  
+  # Timezone for schedule (default: Europe/London)
+  timezone: "Europe/London"
+  
+  # Fixed email address for sync error notifications
+  # This email will be added to a Log-Based Alert for scheduler failures
+  error_notification_email: "osm-sync-errors@1stwarleyscouts.org.uk"
+

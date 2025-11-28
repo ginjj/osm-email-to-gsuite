@@ -40,6 +40,7 @@ config/*.backup
 google_credentials.json
 service-account-key.json
 token.pickle
+scheduler_token.txt
 
 # IDE
 .idea/

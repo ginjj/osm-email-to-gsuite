@@ -113,10 +113,11 @@ def main():
         st.caption(f"🏕️ OSM Sync v{__version__}")
     
     # Main tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 Dashboard",
         "🔄 Sync to Google",
         "📜 Logs",
+        "⏰ Scheduler",
         "⚙️ Configuration"
     ])
     
@@ -132,9 +133,255 @@ def main():
     with tab3:
         show_logs_page()
     
-    # Tab 4: Configuration
+    # Tab 4: Scheduler
     with tab4:
+        show_scheduler_page(google_config)
+    
+    # Tab 5: Configuration
+    with tab5:
         show_config_page(email_config)
+
+
+def show_scheduler_page(google_config):
+    """Display and manage Cloud Scheduler configuration."""
+    st.header("⏰ Automated Sync Scheduler")
+    
+    st.markdown("""
+    Configure when the automated sync runs. The scheduler will call the API to perform
+    a sync operation at the specified times.
+    """)
+    
+    # Get scheduler config from google_config
+    scheduler_config = google_config.get('scheduler', {})
+    current_enabled = scheduler_config.get('enabled', False)
+    current_schedule = scheduler_config.get('schedule', '0 9 * * 1')
+    current_timezone = scheduler_config.get('timezone', 'Europe/London')
+    error_email = scheduler_config.get('error_notification_email', 'osm-sync-errors@1stwarleyscouts.org.uk')
+    
+    st.markdown("---")
+    
+    # Current status section
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("Current Configuration")
+        
+        # Show current settings
+        status_icon = "✅" if current_enabled else "⏸️"
+        status_text = "ENABLED" if current_enabled else "PAUSED"
+        st.metric("Status", f"{status_icon} {status_text}")
+        
+        st.info(f"📅 **Schedule**: `{current_schedule}`")
+        st.info(f"🌍 **Timezone**: {current_timezone}")
+        st.info(f"📧 **Error Notifications**: {error_email}")
+        
+        # Decode cron schedule for user
+        cron_explanation = explain_cron_schedule(current_schedule)
+        st.caption(f"💡 This means: {cron_explanation}")
+    
+    with col2:
+        st.subheader("Quick Actions")
+        
+        if current_enabled:
+            if st.button("⏸️ Pause Scheduler", type="primary", use_container_width=True):
+                update_scheduler_config(enabled=False)
+                st.success("Scheduler paused!")
+                st.rerun()
+        else:
+            if st.button("▶️ Enable Scheduler", type="primary", use_container_width=True):
+                update_scheduler_config(enabled=True)
+                st.success("Scheduler enabled!")
+                st.rerun()
+    
+    st.markdown("---")
+    
+    # Edit schedule section
+    st.subheader("Update Schedule")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Common schedule presets
+        st.markdown("**Quick Presets:**")
+        presets = {
+            "Every Monday at 9 AM": "0 9 * * 1",
+            "Every Day at 9 AM": "0 9 * * *",
+            "Monday & Thursday at 9 AM": "0 9 * * 1,4",
+            "Every 6 hours": "0 */6 * * *",
+            "Every Sunday at 8 AM": "0 8 * * 0"
+        }
+        
+        selected_preset = st.selectbox(
+            "Choose a preset",
+            options=["Custom"] + list(presets.keys()),
+            index=0
+        )
+        
+        if selected_preset != "Custom":
+            new_schedule = presets[selected_preset]
+        else:
+            new_schedule = st.text_input(
+                "Custom cron schedule",
+                value=current_schedule,
+                help="Format: minute hour day month day-of-week"
+            )
+        
+        # Show explanation of new schedule
+        if new_schedule != current_schedule:
+            st.caption(f"💡 New schedule: {explain_cron_schedule(new_schedule)}")
+    
+    with col2:
+        st.markdown("**Timezone:**")
+        new_timezone = st.selectbox(
+            "Select timezone",
+            options=[
+                "Europe/London",
+                "Europe/Paris",
+                "America/New_York",
+                "America/Los_Angeles",
+                "UTC"
+            ],
+            index=0 if current_timezone == "Europe/London" else ["Europe/London", "Europe/Paris", "America/New_York", "America/Los_Angeles", "UTC"].index(current_timezone) if current_timezone in ["Europe/London", "Europe/Paris", "America/New_York", "America/Los_Angeles", "UTC"] else 0
+        )
+    
+    # Apply changes button
+    if new_schedule != current_schedule or new_timezone != current_timezone:
+        if st.button("💾 Save Schedule Changes", type="primary"):
+            update_scheduler_config(
+                schedule=new_schedule,
+                timezone=new_timezone
+            )
+            st.success("Schedule updated successfully!")
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Error notifications section
+    st.subheader("📧 Error Notifications")
+    st.markdown(f"""
+    When the scheduler encounters an error, notifications will be sent to:
+    
+    **{error_email}**
+    
+    This is configured via Log-Based Alerts in Google Cloud. See `docs/LOG_BASED_ALERTS.md`
+    for setup instructions.
+    """)
+    
+    # Next run info
+    st.markdown("---")
+    st.subheader("📅 Schedule Information")
+    
+    try:
+        # Try to fetch actual scheduler status from API
+        import requests
+        api_url = os.getenv('CLOUD_RUN_URL', 'http://localhost:8080')
+        api_url = api_url.replace('osm-sync', 'osm-sync-api')  # Use API service
+        
+        # Get auth token from config or env
+        auth_token = os.getenv('SCHEDULER_AUTH_TOKEN')
+        
+        if auth_token:
+            headers = {'Authorization': f'Bearer {auth_token}'}
+            response = requests.get(f'{api_url}/api/scheduler/status', headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if data.get('next_run'):
+                    from datetime import datetime
+                    next_run = datetime.fromisoformat(data['next_run'].replace('Z', '+00:00'))
+                    st.success(f"⏰ Next scheduled run: **{next_run.strftime('%A, %B %d, %Y at %H:%M %Z')}**")
+                
+                if data.get('last_run'):
+                    from datetime import datetime
+                    last_run = datetime.fromisoformat(data['last_run'].replace('Z', '+00:00'))
+                    status_icon = "✅" if data.get('last_status_code', 0) >= 0 else "❌"
+                    st.info(f"{status_icon} Last run: {last_run.strftime('%A, %B %d, %Y at %H:%M %Z')}")
+        else:
+            st.warning("⚠️ Cannot fetch live scheduler status - auth token not configured")
+            
+    except Exception as e:
+        st.caption(f"ℹ️ Live scheduler status unavailable: {str(e)}")
+
+
+def explain_cron_schedule(cron_expr: str) -> str:
+    """Convert cron expression to human-readable text."""
+    parts = cron_expr.split()
+    if len(parts) != 5:
+        return "Invalid cron format"
+    
+    minute, hour, day, month, dow = parts
+    
+    # Day of week explanation
+    dow_map = {'0': 'Sunday', '1': 'Monday', '2': 'Tuesday', '3': 'Wednesday',
+               '4': 'Thursday', '5': 'Friday', '6': 'Saturday', '7': 'Sunday'}
+    
+    if dow != '*':
+        if ',' in dow:
+            days = [dow_map.get(d, d) for d in dow.split(',')]
+            day_str = f"every {', '.join(days)}"
+        else:
+            day_str = f"every {dow_map.get(dow, dow)}"
+    elif day != '*':
+        day_str = f"on day {day} of the month"
+    else:
+        day_str = "every day"
+    
+    # Hour/minute explanation
+    if hour.startswith('*/'):
+        freq = hour[2:]
+        time_str = f"every {freq} hours"
+    elif minute.startswith('*/'):
+        freq = minute[2:]
+        time_str = f"every {freq} minutes"
+    else:
+        time_str = f"at {hour.zfill(2)}:{minute.zfill(2)}"
+    
+    return f"{day_str} {time_str}"
+
+
+def update_scheduler_config(enabled=None, schedule=None, timezone=None):
+    """Update scheduler configuration via API."""
+    try:
+        import requests
+        
+        api_url = os.getenv('CLOUD_RUN_URL', 'http://localhost:8080')
+        api_url = api_url.replace('osm-sync', 'osm-sync-api')  # Use API service
+        auth_token = os.getenv('SCHEDULER_AUTH_TOKEN')
+        
+        if not auth_token:
+            st.error("Cannot update scheduler - auth token not configured")
+            return False
+        
+        headers = {
+            'Authorization': f'Bearer {auth_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        data = {}
+        if enabled is not None:
+            data['enabled'] = enabled
+        if schedule is not None:
+            data['schedule'] = schedule
+        if timezone is not None:
+            data['timezone'] = timezone
+        
+        response = requests.post(
+            f'{api_url}/api/scheduler/update',
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return True
+        else:
+            st.error(f"Failed to update scheduler: {response.json().get('message', 'Unknown error')}")
+            return False
+            
+    except Exception as e:
+        st.error(f"Error updating scheduler: {str(e)}")
+        return False
 
 
 def show_dashboard(email_config):

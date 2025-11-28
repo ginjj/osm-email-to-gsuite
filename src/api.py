@@ -240,6 +240,145 @@ def api_sync():
         }), 500
 
 
+@app.route('/api/scheduler/status', methods=['GET'])
+def get_scheduler_status():
+    """
+    Get current scheduler job status and configuration.
+    
+    Response:
+    {
+        "enabled": true,
+        "schedule": "0 9 * * 1",
+        "timezone": "Europe/London",
+        "next_run": "2025-12-01T09:00:00Z",
+        "last_run": "2025-11-25T09:00:00Z",
+        "last_status": "success"
+    }
+    """
+    # Verify authorization
+    if not verify_scheduler_token():
+        return jsonify({
+            "status": "error",
+            "message": "Unauthorized - Invalid or missing auth token"
+        }), 401
+    
+    try:
+        from google.cloud import scheduler_v1
+        
+        client = scheduler_v1.CloudSchedulerClient()
+        project_id = os.getenv('GCP_PROJECT_ID')
+        location = 'europe-west2'
+        job_name = f'projects/{project_id}/locations/{location}/jobs/osm-weekly-sync'
+        
+        try:
+            job = client.get_job(name=job_name)
+            
+            return jsonify({
+                "enabled": job.state == scheduler_v1.Job.State.ENABLED,
+                "schedule": job.schedule,
+                "timezone": job.time_zone,
+                "next_run": job.schedule_time.isoformat() if job.schedule_time else None,
+                "last_run": job.last_attempt_time.isoformat() if job.last_attempt_time else None,
+                "last_status_code": job.status.code if job.status else None
+            }), 200
+            
+        except Exception as e:
+            if "NOT_FOUND" in str(e):
+                return jsonify({
+                    "enabled": False,
+                    "message": "Scheduler job not yet created"
+                }), 200
+            raise
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+@app.route('/api/scheduler/update', methods=['POST'])
+def update_scheduler():
+    """
+    Update scheduler configuration (enable/disable, change schedule).
+    
+    Request body:
+    {
+        "enabled": true,
+        "schedule": "0 9 * * 1",  # Optional
+        "timezone": "Europe/London"  # Optional
+    }
+    
+    Response:
+    {
+        "status": "success",
+        "message": "Scheduler updated successfully"
+    }
+    """
+    # Verify authorization
+    if not verify_scheduler_token():
+        return jsonify({
+            "status": "error",
+            "message": "Unauthorized - Invalid or missing auth token"
+        }), 401
+    
+    data = request.get_json() or {}
+    
+    try:
+        from google.cloud import scheduler_v1
+        
+        client = scheduler_v1.CloudSchedulerClient()
+        project_id = os.getenv('GCP_PROJECT_ID')
+        location = 'europe-west2'
+        job_name = f'projects/{project_id}/locations/{location}/jobs/osm-weekly-sync'
+        
+        try:
+            job = client.get_job(name=job_name)
+            
+            # Update fields
+            update_mask = []
+            
+            if 'enabled' in data:
+                if data['enabled']:
+                    job.state = scheduler_v1.Job.State.ENABLED
+                else:
+                    job.state = scheduler_v1.Job.State.PAUSED
+                update_mask.append('state')
+            
+            if 'schedule' in data:
+                job.schedule = data['schedule']
+                update_mask.append('schedule')
+            
+            if 'timezone' in data:
+                job.time_zone = data['timezone']
+                update_mask.append('time_zone')
+            
+            # Apply updates
+            if update_mask:
+                from google.protobuf import field_mask_pb2
+                update_mask_obj = field_mask_pb2.FieldMask(paths=update_mask)
+                client.update_job(job=job, update_mask=update_mask_obj)
+            
+            return jsonify({
+                "status": "success",
+                "message": "Scheduler updated successfully"
+            }), 200
+            
+        except Exception as e:
+            if "NOT_FOUND" in str(e):
+                return jsonify({
+                    "status": "error",
+                    "message": "Scheduler job not found. Please create it first."
+                }), 404
+            raise
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint for monitoring."""
