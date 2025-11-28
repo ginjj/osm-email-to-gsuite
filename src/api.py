@@ -74,6 +74,11 @@ def perform_sync(dry_run: bool = False, triggered_by: str = "scheduler") -> Dict
     
     logger = get_logger()
     
+    # Generate unique sync run ID for this sync operation
+    from datetime import datetime
+    import random
+    sync_run_id = datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f') + f"-{random.randint(1000, 9999)}"
+    
     try:
         # Load configurations
         email_config, google_config = load_configs()
@@ -144,7 +149,8 @@ def perform_sync(dry_run: bool = False, triggered_by: str = "scheduler") -> Dict
                         members_added=set(result.get('added_emails', [])),
                         members_removed=set(result.get('removed_emails', [])),
                         dry_run=dry_run,
-                        triggered_by=triggered_by
+                        triggered_by=triggered_by,
+                        sync_run_id=sync_run_id
                     )
                     
                     # Update results
@@ -167,7 +173,8 @@ def perform_sync(dry_run: bool = False, triggered_by: str = "scheduler") -> Dict
                         status=SyncStatus.ERROR,
                         error_message=str(e),
                         dry_run=dry_run,
-                        triggered_by=triggered_by
+                        triggered_by=triggered_by,
+                        sync_run_id=sync_run_id
                     )
             
             results["sections_synced"] += 1

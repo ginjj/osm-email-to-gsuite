@@ -3,8 +3,7 @@ Streamlit web interface for OSM to Google Workspace synchronization.
 Provides a user-friendly web UI for managing sync operations.
 """
 
-# Application version
-__version__ = "1.0.0"
+from version import __version__
 
 import streamlit as st
 import yaml
