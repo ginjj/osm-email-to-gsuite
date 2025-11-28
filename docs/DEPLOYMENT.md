@@ -169,14 +169,61 @@ service_account_subject: admin@your-domain.com
 
 For Cloud deployment, set these environment variables:
 
+### Required Environment Variables
+
+#### SCHEDULER_AUTH_TOKEN
+Authentication token for scheduler API endpoints. Required for the Streamlit UI to communicate with the API service.
+
+**Generate token:**
 ```bash
-# Cloud Run
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+**Set on both services:**
+```bash
+# Set on Streamlit UI service (osm-sync)
 gcloud run services update osm-sync \
-  --set-env-vars="DOMAIN=your-domain.com"
+  --update-env-vars SCHEDULER_AUTH_TOKEN=your-generated-token \
+  --region europe-west2 \
+  --project YOUR_PROJECT_ID
+
+# Set on API service (osm-sync-api)
+gcloud run services update osm-sync-api \
+  --update-env-vars SCHEDULER_AUTH_TOKEN=your-generated-token \
+  --region europe-west2 \
+  --project YOUR_PROJECT_ID
+
+# Update Cloud Scheduler job to use the token
+gcloud scheduler jobs update http osm-weekly-sync \
+  --location=europe-west2 \
+  --project=YOUR_PROJECT_ID \
+  --update-headers="Authorization=Bearer your-generated-token"
+```
+
+**Local development:**
+```bash
+# PowerShell
+$env:SCHEDULER_AUTH_TOKEN = "your-generated-token"
+
+# Bash/Zsh
+export SCHEDULER_AUTH_TOKEN="your-generated-token"
+
+# Or create a .env file (copy from .env.example)
+SCHEDULER_AUTH_TOKEN=your-generated-token
+```
+
+### Optional Environment Variables
+
+```bash
+# Cloud Run example
+gcloud run services update osm-sync \
+  --set-env-vars="DOMAIN=your-domain.com,GCP_PROJECT_ID=your-project-id"
 
 # Or in app.yaml for App Engine
 env_variables:
   DOMAIN: 'your-domain.com'
+  GCP_PROJECT_ID: 'your-project-id'
+  SCHEDULER_AUTH_TOKEN: 'your-generated-token'
 ```
 
 ## Security Best Practices
