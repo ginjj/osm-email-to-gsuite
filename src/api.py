@@ -353,11 +353,33 @@ def update_scheduler():
                 job.time_zone = data['timezone']
                 update_mask.append('time_zone')
             
-            # Apply updates
+            # Apply updates to Cloud Scheduler
             if update_mask:
                 from google.protobuf import field_mask_pb2
                 update_mask_obj = field_mask_pb2.FieldMask(paths=update_mask)
                 client.update_job(job=job, update_mask=update_mask_obj)
+            
+            # Also update the config in Secret Manager so it persists
+            try:
+                config_mgr = get_config_manager()
+                google_config = config_mgr.load_google_config()
+                
+                # Update scheduler section
+                if 'scheduler' not in google_config:
+                    google_config['scheduler'] = {}
+                
+                if 'enabled' in data:
+                    google_config['scheduler']['enabled'] = data['enabled']
+                if 'schedule' in data:
+                    google_config['scheduler']['schedule'] = data['schedule']
+                if 'timezone' in data:
+                    google_config['scheduler']['timezone'] = data['timezone']
+                
+                # Save back to Secret Manager
+                config_mgr.save_google_config(google_config)
+            except Exception as config_error:
+                # Log but don't fail - scheduler job was updated successfully
+                print(f"Warning: Could not update config in Secret Manager: {config_error}")
             
             return jsonify({
                 "status": "success",

@@ -83,6 +83,31 @@ class ConfigManager:
             with open('config/google_config.yaml', 'r') as f:
                 return yaml.safe_load(f)
     
+    def save_google_config(self, config: Dict) -> None:
+        """
+        Save Google Workspace configuration.
+        
+        Args:
+            config: Google config dict to save
+        """
+        yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
+        
+        if self.use_cloud:
+            # Update Secret Manager
+            # Note: Secret Manager is immutable, so we add a new version
+            parent = f"projects/{self.project_id}/secrets/google-config"
+            payload = yaml_content.encode('UTF-8')
+            self.secret_client.add_secret_version(
+                request={
+                    "parent": parent,
+                    "payload": {"data": payload}
+                }
+            )
+        else:
+            # Save to local file
+            with open('config/google_config.yaml', 'w') as f:
+                f.write(yaml_content)
+    
     def load_email_config(self) -> Dict:
         """
         Load email/section mapping configuration.
