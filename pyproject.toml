@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "osm-email-to-gsuite"
-version = "1.1.0"
+version = "1.2.0"
 description = "Synchronize member data from Online Scout Manager to Google Workspace groups"
 authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"

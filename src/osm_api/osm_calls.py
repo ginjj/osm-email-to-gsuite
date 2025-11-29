@@ -18,7 +18,10 @@ def _load_config():
         return
     
     # Check if we're in cloud environment
-    use_cloud = os.getenv('USE_CLOUD_CONFIG') == 'true'
+    use_cloud_var = os.getenv('USE_CLOUD_CONFIG')
+    print(f"DEBUG: USE_CLOUD_CONFIG environment variable = '{use_cloud_var}'")
+    use_cloud = use_cloud_var == 'true'
+    print(f"DEBUG: use_cloud = {use_cloud}")
     
     if use_cloud:
         # Use cloud config (Secret Manager)

@@ -7,8 +7,9 @@ python -m gunicorn --bind 0.0.0.0:8081 --workers 2 --timeout 300 src.api:app &
 FLASK_PID=$!
 
 # Start Streamlit on port 8080 (main port)
+# Config is read from .streamlit/config.toml
 echo "Starting Streamlit on port 8080..."
-streamlit run src/app.py --server.port 8080 --server.address 0.0.0.0 --server.headless true &
+streamlit run src/app.py &
 STREAMLIT_PID=$!
 
 # Wait for both processes
