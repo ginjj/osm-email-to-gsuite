@@ -420,14 +420,16 @@ def health_check():
 @app.route('/', methods=['GET'])
 def root():
     """Root endpoint - redirect to Streamlit UI."""
-    return """
+    ui_url = os.environ.get('CLOUD_RUN_URL', 'https://sync.1stwarleyscouts.org.uk')
+    return f"""
     <html>
         <head>
-            <meta http-equiv="refresh" content="0; url=/" />
+            <meta http-equiv="refresh" content="0; url={ui_url}" />
         </head>
         <body>
-            <p>Redirecting to Streamlit UI...</p>
-            <p>If not redirected, <a href="/">click here</a>.</p>
+            <p>This is the API service. Redirecting to Streamlit UI...</p>
+            <p>If not redirected, <a href="{ui_url}">click here</a>.</p>
+            <p>API endpoints: <a href="/api/health">/api/health</a>, <a href="/api/scheduler/status">/api/scheduler/status</a></p>
         </body>
     </html>
     """
