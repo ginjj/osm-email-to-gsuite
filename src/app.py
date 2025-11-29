@@ -360,6 +360,17 @@ def explain_cron_schedule(cron_expr: str) -> str:
     else:
         time_str = f"at {hour.zfill(2)}:{minute.zfill(2)}"
     
+    # Month explanation
+    if month != '*':
+        month_map = {'1': 'January', '2': 'February', '3': 'March', '4': 'April',
+                     '5': 'May', '6': 'June', '7': 'July', '8': 'August',
+                     '9': 'September', '10': 'October', '11': 'November', '12': 'December'}
+        month_str = f" in {month_map.get(month, f'month {month}')}"
+    else:
+        month_str = ""
+    
+    return f"{time_str} {day_str}{month_str}".strip()
+    
 def update_scheduler_config(enabled=None, schedule=None, timezone=None):
     """Update scheduler configuration via API."""
     try:
@@ -370,9 +381,6 @@ def update_scheduler_config(enabled=None, schedule=None, timezone=None):
         if not api_url:
             api_url = os.getenv('CLOUD_RUN_URL', 'http://localhost:8080')
             api_url = api_url.replace('osm-sync', 'osm-sync-api')  # Use API service
-        auth_token = os.getenv('SCHEDULER_AUTH_TOKEN')
-        api_url = os.getenv('CLOUD_RUN_URL', 'http://localhost:8080')
-        api_url = api_url.replace('osm-sync', 'osm-sync-api')  # Use API service
         auth_token = os.getenv('SCHEDULER_AUTH_TOKEN')
         
         if not auth_token:

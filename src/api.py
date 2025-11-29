@@ -274,7 +274,7 @@ def get_scheduler_status():
         
         client = scheduler_v1.CloudSchedulerClient()
         project_id = os.getenv('GCP_PROJECT_ID')
-        location = 'europe-west2'
+        location = 'europe-west1'  # Updated to match new region
         job_name = f'projects/{project_id}/locations/{location}/jobs/osm-weekly-sync'
         
         try:
@@ -336,7 +336,7 @@ def update_scheduler():
         
         client = scheduler_v1.CloudSchedulerClient()
         project_id = os.getenv('GCP_PROJECT_ID')
-        location = 'europe-west2'
+        location = 'europe-west1'  # Updated to match new region
         job_name = f'projects/{project_id}/locations/{location}/jobs/osm-weekly-sync'
         
         try:
@@ -345,12 +345,12 @@ def update_scheduler():
             # Update fields
             update_mask = []
             
+            # Enable/disable job using correct API methods
             if 'enabled' in data:
                 if data['enabled']:
-                    job.state = scheduler_v1.Job.State.ENABLED
+                    client.resume_job(name=job_name)
                 else:
-                    job.state = scheduler_v1.Job.State.PAUSED
-                update_mask.append('state')
+                    client.pause_job(name=job_name)
             
             if 'schedule' in data:
                 job.schedule = data['schedule']
