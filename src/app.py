@@ -36,7 +36,11 @@ st.set_page_config(
 
 
 def load_configs():
-    """Load all configuration files using ConfigManager."""
+    """Load all configuration files using ConfigManager (cached)."""
+    # Check if configs are already loaded in session state
+    if 'email_config' in st.session_state and 'google_config' in st.session_state:
+        return st.session_state['email_config'], st.session_state['google_config'], None
+    
     try:
         config_mgr = get_config_manager()
         # Store config manager in session state for later use
@@ -44,7 +48,11 @@ def load_configs():
         
         osm_config, google_config, email_config, error = config_mgr.load_all_configs()
         if error:
-            return None, None, None, error
+            return None, None, error
+        
+        # Cache configs in session state
+        st.session_state['email_config'] = email_config
+        st.session_state['google_config'] = google_config
         
         return email_config, google_config, None
     except Exception as e:
@@ -1305,7 +1313,9 @@ def show_config_page(email_config):
                     st.session_state['config_edit_mode'] = False
                     # Increment counter to reset add section input fields
                     st.session_state['add_section_counter'] += 1
-                    # Clear cached sections to force reload
+                    # Clear cached configs to force reload
+                    if 'email_config' in st.session_state:
+                        del st.session_state['email_config']
                     if 'sections' in st.session_state:
                         del st.session_state['sections']
                     st.rerun()
