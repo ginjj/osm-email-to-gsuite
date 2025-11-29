@@ -150,38 +150,63 @@ def show_scheduler_page(google_config):
     a sync operation at the specified times.
     """)
     
-    # Get scheduler config from google_config
-    scheduler_config = google_config.get('scheduler', {})
-    current_enabled = scheduler_config.get('enabled', False)
-    current_schedule = scheduler_config.get('schedule', '0 9 * * 1')
-    current_timezone = scheduler_config.get('timezone', 'Europe/London')
-    error_email = scheduler_config.get('error_notification_email', 'osm-sync-errors@1stwarleyscouts.org.uk')
-    
+
+    # Fetch live scheduler status from API
+    import requests
+    # Use custom API URL if set, otherwise derive from CLOUD_RUN_URL
+    api_url = os.getenv('API_BASE_URL')
+    if not api_url:
+        api_url = os.getenv('CLOUD_RUN_URL', 'http://localhost:8080')
+        api_url = api_url.replace('osm-sync', 'osm-sync-api')
+    auth_token = os.getenv('SCHEDULER_AUTH_TOKEN')
+    live_enabled = None
+    live_schedule = None
+    live_timezone = None
+    error_email = google_config.get('scheduler', {}).get('error_notification_email', 'osm-sync-errors@1stwarleyscouts.org.uk')
+    api_error = None
+    if auth_token:
+        headers = {'Authorization': f'Bearer {auth_token}'}
+        try:
+            response = requests.get(f'{api_url}/api/scheduler/status', headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                live_enabled = data.get('enabled', False)
+                live_schedule = data.get('schedule', '0 9 * * 1')
+                live_timezone = data.get('timezone', 'Europe/London')
+            else:
+                api_error = f"API error: {response.status_code} {response.text}"
+        except Exception as e:
+            api_error = str(e)
+    else:
+        api_error = "Auth token not configured."
+
+    # Fallback to config if API fails
+    if live_enabled is None:
+        scheduler_config = google_config.get('scheduler', {})
+        live_enabled = scheduler_config.get('enabled', False)
+        live_schedule = scheduler_config.get('schedule', '0 9 * * 1')
+        live_timezone = scheduler_config.get('timezone', 'Europe/London')
+
     st.markdown("---")
-    
+
     # Current status section
     col1, col2 = st.columns([2, 1])
-    
+
     with col1:
         st.subheader("Current Configuration")
-        
-        # Show current settings
-        status_icon = "✅" if current_enabled else "⏸️"
-        status_text = "ENABLED" if current_enabled else "PAUSED"
+        status_icon = "✅" if live_enabled else "⏸️"
+        status_text = "ENABLED" if live_enabled else "PAUSED"
         st.metric("Status", f"{status_icon} {status_text}")
-        
-        st.info(f"📅 **Schedule**: `{current_schedule}`")
-        st.info(f"🌍 **Timezone**: {current_timezone}")
-        st.info(f"📧 **Error Notifications**: {error_email}")
-        
-        # Decode cron schedule for user
-        cron_explanation = explain_cron_schedule(current_schedule)
+        st.info(f"📅 **Schedule**: `{live_schedule}`")
+        st.info(f"🌍 **Timezone**: {live_timezone}")
+        cron_explanation = explain_cron_schedule(live_schedule)
         st.caption(f"💡 This means: {cron_explanation}")
-    
+        if api_error:
+            st.warning(f"Live status unavailable: {api_error}")
+
     with col2:
         st.subheader("Quick Actions")
-        
-        if current_enabled:
+        if live_enabled:
             if st.button("⏸️ Pause Scheduler", type="primary", use_container_width=True):
                 update_scheduler_config(enabled=False)
                 st.success("Scheduler paused!")
@@ -191,14 +216,13 @@ def show_scheduler_page(google_config):
                 update_scheduler_config(enabled=True)
                 st.success("Scheduler enabled!")
                 st.rerun()
-    
+
     st.markdown("---")
     
     # Edit schedule section
     st.subheader("Update Schedule")
     
     col1, col2 = st.columns(2)
-    
     with col1:
         # Common schedule presets
         st.markdown("**Quick Presets:**")
@@ -209,42 +233,41 @@ def show_scheduler_page(google_config):
             "Every 6 hours": "0 */6 * * *",
             "Every Sunday at 8 AM": "0 8 * * 0"
         }
-        
         selected_preset = st.selectbox(
             "Choose a preset",
             options=["Custom"] + list(presets.keys()),
             index=0
         )
-        
         if selected_preset != "Custom":
             new_schedule = presets[selected_preset]
         else:
             new_schedule = st.text_input(
                 "Custom cron schedule",
-                value=current_schedule,
+                value=live_schedule,
                 help="Format: minute hour day month day-of-week"
             )
-        
         # Show explanation of new schedule
-        if new_schedule != current_schedule:
+        if new_schedule != live_schedule:
             st.caption(f"💡 New schedule: {explain_cron_schedule(new_schedule)}")
-    
     with col2:
         st.markdown("**Timezone:**")
+        timezone_options = [
+            "Europe/London",
+            "Europe/Paris",
+            "America/New_York",
+            "America/Los_Angeles",
+            "UTC"
+        ]
+        tz_index = 0
+        if live_timezone in timezone_options:
+            tz_index = timezone_options.index(live_timezone)
         new_timezone = st.selectbox(
             "Select timezone",
-            options=[
-                "Europe/London",
-                "Europe/Paris",
-                "America/New_York",
-                "America/Los_Angeles",
-                "UTC"
-            ],
-            index=0 if current_timezone == "Europe/London" else ["Europe/London", "Europe/Paris", "America/New_York", "America/Los_Angeles", "UTC"].index(current_timezone) if current_timezone in ["Europe/London", "Europe/Paris", "America/New_York", "America/Los_Angeles", "UTC"] else 0
+            options=timezone_options,
+            index=tz_index
         )
-    
     # Apply changes button
-    if new_schedule != current_schedule or new_timezone != current_timezone:
+    if new_schedule != live_schedule or new_timezone != live_timezone:
         if st.button("💾 Save Schedule Changes", type="primary"):
             update_scheduler_config(
                 schedule=new_schedule,
@@ -252,18 +275,16 @@ def show_scheduler_page(google_config):
             )
             st.success("Schedule updated successfully!")
             st.rerun()
-    
     st.markdown("---")
     
     # Error notifications section
     st.subheader("📧 Error Notifications")
     st.markdown(f"""
     When the scheduler encounters an error, notifications will be sent to:
-    
+
     **{error_email}**
-    
-    This is configured via Log-Based Alerts in Google Cloud. See `docs/LOG_BASED_ALERTS.md`
-    for setup instructions.
+
+    This is configured via Log-Based Alerts in Google Cloud.
     """)
     
     # Next run info
@@ -273,8 +294,11 @@ def show_scheduler_page(google_config):
     try:
         # Try to fetch actual scheduler status from API
         import requests
-        api_url = os.getenv('CLOUD_RUN_URL', 'http://localhost:8080')
-        api_url = api_url.replace('osm-sync', 'osm-sync-api')  # Use API service
+        # Use custom API URL if set, otherwise derive from CLOUD_RUN_URL
+        api_url = os.getenv('API_BASE_URL')
+        if not api_url:
+            api_url = os.getenv('CLOUD_RUN_URL', 'http://localhost:8080')
+            api_url = api_url.replace('osm-sync', 'osm-sync-api')  # Use API service
         
         # Get auth token from config or env
         auth_token = os.getenv('SCHEDULER_AUTH_TOKEN')
@@ -336,14 +360,17 @@ def explain_cron_schedule(cron_expr: str) -> str:
     else:
         time_str = f"at {hour.zfill(2)}:{minute.zfill(2)}"
     
-    return f"{day_str} {time_str}"
-
-
 def update_scheduler_config(enabled=None, schedule=None, timezone=None):
     """Update scheduler configuration via API."""
     try:
         import requests
         
+        # Use custom API URL if set, otherwise derive from CLOUD_RUN_URL
+        api_url = os.getenv('API_BASE_URL')
+        if not api_url:
+            api_url = os.getenv('CLOUD_RUN_URL', 'http://localhost:8080')
+            api_url = api_url.replace('osm-sync', 'osm-sync-api')  # Use API service
+        auth_token = os.getenv('SCHEDULER_AUTH_TOKEN')
         api_url = os.getenv('CLOUD_RUN_URL', 'http://localhost:8080')
         api_url = api_url.replace('osm-sync', 'osm-sync-api')  # Use API service
         auth_token = os.getenv('SCHEDULER_AUTH_TOKEN')
@@ -784,19 +811,31 @@ def show_logs_page():
     current_page = min(st.session_state['logs_page'], total_pages)  # Ensure valid page
     
     # Pagination controls
-    col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
-    
-    with col1:
-        if st.button("⬅️ Previous", disabled=(current_page <= 1)):
+    nav_col1, nav_col2, nav_col3 = st.columns([2, 4, 2])
+
+    with nav_col1:
+        st.markdown("")  # Spacer
+        prev_disabled = current_page <= 1
+        next_disabled = current_page >= total_pages
+        prev, next_ = st.columns([1, 1])
+        with prev:
+            st.button("⬅️ Previous", key="prev_page_btn", disabled=prev_disabled, use_container_width=True)
+        with next_:
+            st.button("Next ➡️", key="next_page_btn", disabled=next_disabled, use_container_width=True)
+        # Button logic
+        if st.session_state.get("prev_page_btn") and not prev_disabled:
             st.session_state['logs_page'] = max(1, current_page - 1)
             st.rerun()
-    
-    with col2:
-        st.markdown(f"**Page {current_page} of {total_pages}** ({total_items} {items_name})")
-    
-    with col3:
-        # Items per page selector
+        if st.session_state.get("next_page_btn") and not next_disabled:
+            st.session_state['logs_page'] = min(total_pages, current_page + 1)
+            st.rerun()
+
+    with nav_col2:
+        st.markdown(f"<div style='text-align:center; font-size:1.1em;'><b>Page {current_page} of {total_pages}</b> <span style='color:gray;'>({total_items} {items_name})</span></div>", unsafe_allow_html=True)
+
+    with nav_col3:
         per_page_options = [10, 25, 50, 100]
+        st.markdown("")  # Spacer
         new_per_page = st.selectbox(
             "Items per page",
             options=per_page_options,
@@ -806,11 +845,6 @@ def show_logs_page():
         if new_per_page != items_per_page:
             st.session_state['logs_per_page'] = new_per_page
             st.session_state['logs_page'] = 1  # Reset to page 1 when changing page size
-            st.rerun()
-    
-    with col4:
-        if st.button("Next ➡️", disabled=(current_page >= total_pages)):
-            st.session_state['logs_page'] = min(total_pages, current_page + 1)
             st.rerun()
     
     st.markdown("---")
@@ -891,12 +925,10 @@ def _display_sync_run(run: List):
     dry_run_label = " 🔍 (Dry Run)" if first_log.dry_run else " ▶️ (Real Sync)"
     
     # Show sync_run_id for debugging
-    sync_run_id = getattr(first_log, 'sync_run_id', None)
-    run_id_label = f" [ID: {sync_run_id[:16]}...]" if sync_run_id else ""
-    
+    # sync_run_id is no longer shown in the summary title for cleaner display
     summary = (f"{run_status_icon} **{run_timestamp_str}** - "
                f"{len(run)} groups - {section_count} sections - "
-               f"➕{total_added} ➖{total_removed}{dry_run_label}{trigger_label}{run_id_label}")
+               f"➕{total_added} ➖{total_removed}{dry_run_label}{trigger_label}")
     
     with st.expander(summary):
         # Run overview

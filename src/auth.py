@@ -146,8 +146,8 @@ def show_login_button():
     # Get authorization URL
     redirect_uri = REDIRECT_URI
     if os.getenv('K_SERVICE'):  # In Cloud Run
-        # Use the actual Cloud Run URL
-        redirect_uri = os.getenv('CLOUD_RUN_URL', REDIRECT_URI)
+        # Use the configured OAuth redirect URI (custom domain)
+        redirect_uri = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', REDIRECT_URI)
     
     # Create authorization URL
     authorization_url = asyncio.run(
@@ -224,7 +224,7 @@ def handle_oauth_callback():
         client = get_oauth_client()
         redirect_uri = REDIRECT_URI
         if os.getenv('K_SERVICE'):
-            redirect_uri = os.getenv('CLOUD_RUN_URL', REDIRECT_URI)
+            redirect_uri = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', REDIRECT_URI)
         
         try:
             # Exchange code for token
@@ -330,7 +330,7 @@ def require_authentication():
         client = get_oauth_client()
         redirect_uri = REDIRECT_URI
         if os.getenv('K_SERVICE'):
-            redirect_uri = os.getenv('CLOUD_RUN_URL', REDIRECT_URI)
+            redirect_uri = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', REDIRECT_URI)
         
         # Redirect to Google OAuth with prompt=none
         # This will silently succeed if user is logged into Google,
