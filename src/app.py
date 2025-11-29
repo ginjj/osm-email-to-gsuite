@@ -721,43 +721,47 @@ def show_logs_page():
                 logger = get_logger()
                 # Load more logs initially for pagination
                 logs = logger.get_recent_logs(limit=500)
+                
+                # Group logs by sync run ID immediately (do heavy processing once)
+                from collections import defaultdict
+                runs_dict = defaultdict(list)
+                
+                for log in logs:
+                    # Group by sync_run_id if available, otherwise fall back to timestamp-based grouping
+                    run_id = getattr(log, 'sync_run_id', None)
+                    if run_id:
+                        runs_dict[run_id].append(log)
+                    else:
+                        # Legacy logs without sync_run_id - use timestamp as key
+                        runs_dict[log.timestamp].append(log)
+                
+                # Convert to list of runs, sorted by newest first (using first log's timestamp)
+                runs = []
+                for run_id, run_logs in runs_dict.items():
+                    runs.append(sorted(run_logs, key=lambda l: l.timestamp, reverse=True))
+                
+                # Sort runs by timestamp of first log in each run
+                runs.sort(key=lambda run: run[0].timestamp, reverse=True)
+                
+                # Cache both raw logs and processed runs
                 st.session_state['sync_logs'] = logs
+                st.session_state['sync_runs'] = runs
                 st.session_state['logs_loaded'] = True
-                st.success(f"✅ Loaded {len(logs)} log entries")
+                st.success(f"✅ Loaded {len(logs)} log entries grouped into {len(runs)} sync runs")
             except Exception as e:
                 st.error(f"❌ Error loading logs: {e}")
                 return
     
-    if 'sync_logs' not in st.session_state:
+    if 'sync_logs' not in st.session_state or 'sync_runs' not in st.session_state:
         st.info("👆 Click 'Refresh Logs' to load sync history")
         return
     
     logs = st.session_state['sync_logs']
+    runs = st.session_state['sync_runs']
     
     if not logs:
         st.info("📭 No sync logs found yet. Logs will appear here after running syncs.")
         return
-    
-    # Group logs by sync run ID (each sync button press gets unique ID)
-    from collections import defaultdict
-    runs_dict = defaultdict(list)
-    
-    for log in logs:
-        # Group by sync_run_id if available, otherwise fall back to timestamp-based grouping
-        run_id = getattr(log, 'sync_run_id', None)
-        if run_id:
-            runs_dict[run_id].append(log)
-        else:
-            # Legacy logs without sync_run_id - use timestamp as key
-            runs_dict[log.timestamp].append(log)
-    
-    # Convert to list of runs, sorted by newest first (using first log's timestamp)
-    runs = []
-    for run_id, run_logs in runs_dict.items():
-        runs.append(sorted(run_logs, key=lambda l: l.timestamp, reverse=True))
-    
-    # Sort runs by timestamp of first log in each run
-    runs.sort(key=lambda run: run[0].timestamp, reverse=True)
     
     # Filters
     st.subheader("🔍 Filters")
