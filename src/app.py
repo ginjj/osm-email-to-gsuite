@@ -1117,6 +1117,9 @@ def _display_log_entry(log):
 
 def show_config_page(email_config):
     """Display and edit section configuration."""
+    import time
+    start_time = time.time()
+    
     st.header("⚙️ Section Configuration")
     st.markdown("Manage the mapping between OSM sections and Google group email prefixes.")
     
@@ -1124,12 +1127,16 @@ def show_config_page(email_config):
         st.error("No sections configured in email_config.yaml")
         return
     
+    print(f"⏱️ Config: Header rendered in {time.time() - start_time:.3f}s")
+    
     # Track changes
     if 'config_changes' not in st.session_state:
         st.session_state['config_changes'] = {}
     
     if 'config_to_delete' not in st.session_state:
         st.session_state['config_to_delete'] = set()
+    
+    print(f"⏱️ Config: State initialized in {time.time() - start_time:.3f}s")
     
     st.markdown("---")
     
@@ -1141,6 +1148,8 @@ def show_config_page(email_config):
         st.session_state['config_additions'] = []
     
     modified_sections = []
+    
+    print(f"⏱️ Config: Before section loop in {time.time() - start_time:.3f}s")
     
     # Display existing sections
     for idx, section in enumerate(email_config['sections']):
@@ -1180,6 +1189,8 @@ def show_config_page(email_config):
         if idx in st.session_state['config_changes']:
             modified_section['email'] = st.session_state['config_changes'][idx]
         modified_sections.append(modified_section)
+    
+    print(f"⏱️ Config: After section loop in {time.time() - start_time:.3f}s")
     
     # Display pending additions (new sections to be added)
     for add_idx, addition in enumerate(st.session_state['config_additions']):
@@ -1316,6 +1327,8 @@ def show_config_page(email_config):
         if st.session_state['config_to_delete']:
             changes_text.append(f"{len(st.session_state['config_to_delete'])} deletions")
         st.info(f"You have unsaved changes ({', '.join(changes_text)})")
+    
+    print(f"⏱️ Config: TOTAL TIME = {time.time() - start_time:.3f}s")
 
 
 def show_config_page_old(email_config):
