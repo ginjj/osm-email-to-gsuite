@@ -57,6 +57,18 @@ htmlcov/
 
 # Logs
 *.log
+logs/
+
+# Firebase (not used - Cloud Run instead)
+.firebase/
+.firebaserc
+firebase.json
+public/
+
+# Temporary/backup files
+*.backup
+NEXT_STEPS.md
+requirements.txt
 
 # GAM legacy
 C:\GAMWork/
