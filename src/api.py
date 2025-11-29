@@ -419,17 +419,23 @@ def health_check():
 
 @app.route('/', methods=['GET'])
 def root():
-    """Root endpoint - redirect to Streamlit UI."""
+    """Root endpoint - show API info."""
     ui_url = os.environ.get('CLOUD_RUN_URL', 'https://sync.1stwarleyscouts.org.uk')
     return f"""
     <html>
         <head>
-            <meta http-equiv="refresh" content="0; url={ui_url}" />
+            <title>OSM Sync API</title>
         </head>
         <body>
-            <p>This is the API service. Redirecting to Streamlit UI...</p>
-            <p>If not redirected, <a href="{ui_url}">click here</a>.</p>
-            <p>API endpoints: <a href="/api/health">/api/health</a>, <a href="/api/scheduler/status">/api/scheduler/status</a></p>
+            <h1>OSM Sync API Service</h1>
+            <p>This is the API backend. For the web interface, visit <a href="{ui_url}">{ui_url}</a></p>
+            <h2>Available Endpoints:</h2>
+            <ul>
+                <li><a href="/api/health">/api/health</a> - Health check</li>
+                <li>/api/scheduler/status - Get scheduler status</li>
+                <li>/api/scheduler/update - Update scheduler configuration</li>
+                <li>/api/sync - Trigger sync (requires authentication)</li>
+            </ul>
         </body>
     </html>
     """
