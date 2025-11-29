@@ -246,6 +246,23 @@ def show_scheduler_page(google_config):
                 value=live_schedule,
                 help="Format: minute hour day month day-of-week"
             )
+            # Show cron format helper
+            with st.expander("ℹ️ Cron Format Reference"):
+                st.code("""┌───────────── minute (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of week (0 - 6, Sunday = 0)
+│ │ │ │ │
+* * * * *
+
+Examples:
+0 9 * * 1       → Every Monday at 9:00 AM
+30 14 * * 1-5   → Weekdays at 2:30 PM
+0 */6 * * *     → Every 6 hours
+0 0 1 * *       → First day of every month at midnight
+15 10 * * 0,6   → Weekends at 10:15 AM""", language="text")
+                st.markdown("📖 [Learn more about cron syntax](https://crontab.guru/)")
         # Show explanation of new schedule
         if new_schedule != live_schedule:
             st.caption(f"💡 New schedule: {explain_cron_schedule(new_schedule)}")
