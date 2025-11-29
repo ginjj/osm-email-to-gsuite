@@ -1116,6 +1116,35 @@ def show_config_page(email_config):
         st.error("No sections configured in email_config.yaml")
         return
     
+    # Initialize edit mode state
+    if 'config_edit_mode' not in st.session_state:
+        st.session_state['config_edit_mode'] = False
+    
+    st.markdown("---")
+    
+    # Show sections in simple table format (fast rendering)
+    st.subheader("Current Sections")
+    
+    # Simple read-only display (very fast)
+    if not st.session_state['config_edit_mode']:
+        # Display as simple table
+        df = pd.DataFrame(email_config['sections'])
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+        
+        col1, col2 = st.columns([1, 5])
+        with col1:
+            if st.button("✏️ Edit Configuration", type="primary"):
+                st.session_state['config_edit_mode'] = True
+                st.rerun()
+        
+        st.info("💡 Sections are read-only by default for faster performance. Click 'Edit Configuration' to make changes.")
+        return
+    
+    # Edit mode (only rendered when explicitly enabled)
+    st.info("🔓 Edit mode is active. Changes won't be saved until you click 'Save Changes'.")
+    
     # Track changes
     if 'config_changes' not in st.session_state:
         st.session_state['config_changes'] = {}
@@ -1123,18 +1152,12 @@ def show_config_page(email_config):
     if 'config_to_delete' not in st.session_state:
         st.session_state['config_to_delete'] = set()
     
-    st.markdown("---")
-    
-    # Display existing sections
-    st.subheader("Current Sections")
-    
-    # Initialize additions list if needed
     if 'config_additions' not in st.session_state:
         st.session_state['config_additions'] = []
     
     modified_sections = []
     
-    # Display existing sections
+    # Display existing sections with edit controls
     for idx, section in enumerate(email_config['sections']):
         if idx in st.session_state['config_to_delete']:
             continue  # Skip deleted sections
@@ -1275,10 +1298,11 @@ def show_config_page(email_config):
                 try:
                     config_mgr.save_email_config(new_config)
                     st.success("✅ Configuration saved successfully!")
-                    # Clear change tracking
+                    # Clear change tracking and exit edit mode
                     st.session_state['config_changes'] = {}
                     st.session_state['config_to_delete'] = set()
                     st.session_state['config_additions'] = []
+                    st.session_state['config_edit_mode'] = False
                     # Increment counter to reset add section input fields
                     st.session_state['add_section_counter'] += 1
                     # Clear cached sections to force reload
@@ -1295,6 +1319,15 @@ def show_config_page(email_config):
             st.session_state['config_changes'] = {}
             st.session_state['config_to_delete'] = set()
             st.session_state['config_additions'] = []
+            st.rerun()
+    
+    with col3:
+        if st.button("❌ Cancel Edit Mode"):
+            # Exit edit mode without saving
+            st.session_state['config_changes'] = {}
+            st.session_state['config_to_delete'] = set()
+            st.session_state['config_additions'] = []
+            st.session_state['config_edit_mode'] = False
             st.rerun()
     
     if has_changes:
