@@ -282,7 +282,54 @@ Legacy scripts still work. New object-based functions have `_dict` suffixed vers
 - `get_sections()` → returns Section objects
 - `get_sections_dict()` → returns dictionaries (deprecated)
 
-## 🐛 Troubleshooting
+## � Security
+
+### Streamlit UI Authentication
+
+The web interface requires Google OAuth 2.0 authentication:
+
+1. **Domain Restriction**: Only `@1stwarleyscouts.org.uk` accounts can sign in
+2. **Group Membership**: Users must be in `osm-sync-admins@1stwarleyscouts.org.uk` group
+3. **Session Management**: Secure token-based sessions with revocation on logout
+
+**Configuration** (via environment variables or secrets):
+```bash
+GOOGLE_OAUTH_CLIENT_ID=your-client-id
+GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+GOOGLE_OAUTH_REDIRECT_URI=https://your-domain.com
+```
+
+### API Authentication
+
+The Flask API uses Bearer token authentication for all sensitive endpoints:
+
+```bash
+# Generate secure token
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# Set as environment variable
+export SCHEDULER_AUTH_TOKEN=your-generated-token
+```
+
+**Protected Endpoints:**
+- `/api/sync` - Perform synchronization
+- `/api/scheduler/status` - Get scheduler status
+- `/api/scheduler/update` - Update scheduler configuration
+- `/api/test-error` - Test error alerts
+
+**Public Endpoints** (monitoring):
+- `/api/health` - Health check
+- `/api/version` - API version
+
+### Security Best Practices
+
+1. **Credentials**: Never commit credentials - all config files in `.gitignore`
+2. **Secret Manager**: Use Google Cloud Secret Manager in production
+3. **Service Accounts**: Limit permissions to minimum required
+4. **Token Rotation**: Rotate `SCHEDULER_AUTH_TOKEN` regularly
+5. **HTTPS Only**: Always use HTTPS in production (Cloud Run enforces this)
+
+## �🐛 Troubleshooting
 
 ### OSM API Issues
 - Verify API credentials in `osm_config.yaml`

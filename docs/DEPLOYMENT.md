@@ -234,16 +234,119 @@ env_variables:
 4. **Enable Cloud Run authentication** if app should be private
 5. **Rotate credentials regularly**
 
-## Monitoring
+## Monitoring & Alerting
 
 ### Cloud Run Logs
 ```bash
-gcloud run services logs read osm-sync --limit 50
+# View Streamlit UI logs
+gcloud beta run services logs read osm-sync --limit 50 --region europe-west1
+
+# View API logs
+gcloud beta run services logs read osm-sync-api --limit 50 --region europe-west1
+
+# Filter for errors
+gcloud beta run services logs read osm-sync-api --limit 20 \
+  --region europe-west1 \
+  --filter="severity>=ERROR"
 ```
 
-### Cloud Logging
+### Email Alert Configuration
+
+The application includes automatic email alerts for scheduler errors.
+
+#### 1. Create Notification Channel
 ```bash
+gcloud alpha monitoring channels create \
+  --display-name="OSM Sync Errors" \
+  --type=email \
+  --channel-labels=email_address=osm-sync-errors@yourdomain.com \
+  --project=YOUR_PROJECT_ID
+```
+
+#### 2. Create Alert Policy
+
+Create `alert-policy.yaml`:
+```yaml
+displayName: "OSM Sync API Errors"
+documentation:
+  content: "Alert triggered when errors are detected in the OSM Sync API Cloud Run service."
+  mimeType: "text/markdown"
+enabled: true
+conditions:
+  - displayName: "Error logs detected"
+    conditionMatchedLog:
+      filter: |
+        resource.type="cloud_run_revision"
+        resource.labels.service_name="osm-sync-api"
+        severity>=ERROR
+notificationChannels:
+  - projects/YOUR_PROJECT_ID/notificationChannels/CHANNEL_ID
+alertStrategy:
+  autoClose: 604800s  # 7 days
+  notificationRateLimit:
+    period: 300s  # Max 1 email per 5 minutes
+combiner: OR
+```
+
+Deploy the alert policy:
+```bash
+gcloud alpha monitoring policies create \
+  --policy-from-file=alert-policy.yaml \
+  --project=YOUR_PROJECT_ID
+```
+
+#### 3. Configure Email Group
+
+If using a Google Group for alerts:
+1. Create group: `osm-sync-errors@yourdomain.com`
+2. In Google Admin Console → Groups → Settings
+3. Enable "Allow external members to email the group"
+
+#### 4. Test Alert System
+
+Use the test script:
+```bash
+# PowerShell
+.\test-scheduler-alert.ps1
+
+# Bash
+./test-scheduler-alert.sh
+```
+
+Or manually:
+```bash
+# Update scheduler to trigger test error
+gcloud scheduler jobs update http osm-weekly-sync \
+  --uri="https://your-api-url/api/test-error?error_type=500&message=TEST" \
+  --location=europe-west1 \
+  --project=YOUR_PROJECT_ID
+
+# Trigger the job
+gcloud scheduler jobs run osm-weekly-sync \
+  --location=europe-west1 \
+  --project=YOUR_PROJECT_ID
+
+# Restore normal endpoint
+gcloud scheduler jobs update http osm-weekly-sync \
+  --uri="https://your-api-url/api/sync" \
+  --location=europe-west1 \
+  --project=YOUR_PROJECT_ID
+```
+
+### Cloud Logging Queries
+```bash
+# View all logs
 gcloud logging read "resource.type=cloud_run_revision" --limit 20
+
+# Filter by severity
+gcloud logging read \
+  "resource.type=cloud_run_revision AND severity>=ERROR" \
+  --limit 20
+
+# Filter by service
+gcloud logging read \
+  "resource.type=cloud_run_revision AND resource.labels.service_name=osm-sync-api" \
+  --limit 20
 ```
 
 ## Troubleshooting

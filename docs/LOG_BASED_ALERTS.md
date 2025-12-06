@@ -2,7 +2,7 @@
 
 ## Overview
 
-Instead of custom email notifications, use Google Cloud's native **Log-Based Alerts** to get notified when scheduled syncs fail.
+Google Cloud's native **Log-Based Alerts** notify you when scheduled syncs fail or encounter errors.
 
 ## Benefits
 
@@ -12,7 +12,94 @@ Instead of custom email notifications, use Google Cloud's native **Log-Based Ale
 ✅ **Non-technical friendly**: Email notifications are easy to understand  
 ✅ **Free**: Part of Cloud Logging (within free tier limits)
 
-## Setup Steps
+## Quick Setup (Automated)
+
+### 1. Create Notification Channel
+
+```bash
+gcloud alpha monitoring channels create \
+  --display-name="OSM Sync Errors" \
+  --type=email \
+  --channel-labels=email_address=osm-sync-errors@1stwarleyscouts.org.uk \
+  --project=YOUR_PROJECT_ID
+```
+
+**Note**: If using a Google Group, make sure to enable "Allow external members to email the group" in Group Settings.
+
+### 2. Create Alert Policy
+
+Create `alert-policy.yaml`:
+
+```yaml
+displayName: "OSM Sync API Errors"
+documentation:
+  content: |
+    Alert triggered when errors are detected in the OSM Sync API Cloud Run service.
+    This includes HTTP 500 errors, unhandled exceptions, and other error-level log entries.
+  mimeType: "text/markdown"
+enabled: true
+conditions:
+  - displayName: "Error logs detected"
+    conditionMatchedLog:
+      filter: |
+        resource.type="cloud_run_revision"
+        resource.labels.service_name="osm-sync-api"
+        severity>=ERROR
+      labelExtractors:
+        error_message: EXTRACT(jsonPayload.message)
+notificationChannels:
+  - projects/YOUR_PROJECT_ID/notificationChannels/CHANNEL_ID
+alertStrategy:
+  autoClose: 604800s  # 7 days
+  notificationRateLimit:
+    period: 300s  # Max 1 email per 5 minutes
+combiner: OR
+```
+
+Deploy it:
+
+```bash
+gcloud alpha monitoring policies create \
+  --policy-from-file=alert-policy.yaml \
+  --project=YOUR_PROJECT_ID
+```
+
+### 3. Test the Alert System
+
+Use the included test script:
+
+```bash
+# PowerShell
+.\test-scheduler-alert.ps1
+
+# Bash
+./test-scheduler-alert.sh
+```
+
+Or test manually with the test-error endpoint:
+
+```bash
+# Update scheduler to call test-error
+gcloud scheduler jobs update http osm-weekly-sync \
+  --uri="https://api.1stwarleyscouts.org.uk/api/test-error?error_type=500&message=TEST" \
+  --location=europe-west1 \
+  --project=YOUR_PROJECT_ID
+
+# Trigger it
+gcloud scheduler jobs run osm-weekly-sync \
+  --location=europe-west1 \
+  --project=YOUR_PROJECT_ID
+
+# Wait for email (usually within 1-2 minutes)
+
+# Restore normal endpoint
+gcloud scheduler jobs update http osm-weekly-sync \
+  --uri="https://api.1stwarleyscouts.org.uk/api/sync" \
+  --location=europe-west1 \
+  --project=YOUR_PROJECT_ID
+```
+
+## Manual Setup (UI)
 
 ### 1. Create Notification Channel (Email)
 
