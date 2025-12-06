@@ -408,6 +408,62 @@ def update_scheduler():
         }), 500
 
 
+@app.route('/api/test-error', methods=['GET', 'POST'])
+def test_error():
+    """
+    Test endpoint to trigger an error for testing scheduler alerts.
+    
+    Usage:
+        1. Update scheduler to call this endpoint
+        2. Trigger scheduler manually
+        3. Check if error email alert is received
+        4. Change scheduler back to /api/sync
+    
+    Query parameters:
+        - error_type: "500" (default), "400", "timeout", "exception"
+        - message: Custom error message (optional)
+    """
+    # Verify scheduler token
+    if not verify_scheduler_token():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    error_type = request.args.get('error_type', '500')
+    message = request.args.get('message', 'TEST ERROR: This is a test error for scheduler alert testing')
+    
+    # Log the error so it triggers alerts
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if error_type == "exception":
+        # Raise an unhandled exception
+        logger.error(f"TEST ERROR: Raising exception - {message}")
+        raise Exception(message)
+    
+    elif error_type == "400":
+        logger.error(f"TEST ERROR: Bad request - {message}")
+        return jsonify({
+            "status": "error",
+            "message": message,
+            "test": True
+        }), 400
+    
+    elif error_type == "timeout":
+        logger.error(f"TEST ERROR: Simulated timeout - {message}")
+        return jsonify({
+            "status": "error",
+            "message": "Sync operation timed out (test error)",
+            "test": True
+        }), 504
+    
+    else:  # Default 500
+        logger.error(f"TEST ERROR: Internal server error - {message}")
+        return jsonify({
+            "status": "error",
+            "message": message,
+            "test": True
+        }), 500
+
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint for monitoring."""
@@ -435,6 +491,7 @@ def root():
                 <li>/api/scheduler/status - Get scheduler status</li>
                 <li>/api/scheduler/update - Update scheduler configuration</li>
                 <li>/api/sync - Trigger sync (requires authentication)</li>
+                <li><a href="/api/test-error">/api/test-error</a> - Test error alerts (requires authentication)</li>
             </ul>
         </body>
     </html>
