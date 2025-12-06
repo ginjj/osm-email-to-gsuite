@@ -15,6 +15,7 @@ from src.osm_api import osm_calls
 from src.gsuite_sync import groups_api
 from src.config_manager import get_config_manager
 from src.sync_logger import get_logger, SyncStatus
+from src.version import __version__
 
 app = Flask(__name__)
 
@@ -469,6 +470,16 @@ def health_check():
     """Health check endpoint for monitoring."""
     return jsonify({
         "status": "healthy",
+        "service": "osm-sync-api",
+        "version": __version__
+    }), 200
+
+
+@app.route('/api/version', methods=['GET'])
+def version_info():
+    """Get API version information."""
+    return jsonify({
+        "version": __version__,
         "service": "osm-sync-api"
     }), 200
 
@@ -480,14 +491,16 @@ def root():
     return f"""
     <html>
         <head>
-            <title>OSM Sync API</title>
+            <title>OSM Sync API v{__version__}</title>
         </head>
         <body>
             <h1>OSM Sync API Service</h1>
+            <p><strong>Version:</strong> {__version__}</p>
             <p>This is the API backend. For the web interface, visit <a href="{ui_url}">{ui_url}</a></p>
             <h2>Available Endpoints:</h2>
             <ul>
-                <li><a href="/api/health">/api/health</a> - Health check</li>
+                <li><a href="/api/health">/api/health</a> - Health check (includes version)</li>
+                <li><a href="/api/version">/api/version</a> - Get API version</li>
                 <li>/api/scheduler/status - Get scheduler status</li>
                 <li>/api/scheduler/update - Update scheduler configuration</li>
                 <li>/api/sync - Trigger sync (requires authentication)</li>
