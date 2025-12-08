@@ -263,9 +263,13 @@ gcloud alpha monitoring channels create \
   --project=YOUR_PROJECT_ID
 ```
 
-#### 2. Create Alert Policy
+#### 2. Create Alert Policies
 
-Create `alert-policy.yaml`:
+**Two alert policies are recommended for comprehensive coverage:**
+
+**A) Application Error Alert** - Catches unhandled exceptions and ERROR-level logs
+
+Create `alert-policy-errors.yaml`:
 ```yaml
 displayName: "OSM Sync API Errors"
 documentation:
@@ -288,12 +292,50 @@ alertStrategy:
 combiner: OR
 ```
 
-Deploy the alert policy:
+**B) Scheduler Failure Alert** - Catches HTTP 4xx/5xx responses from scheduled syncs
+
+Create `alert-policy-scheduler.yaml`:
+```yaml
+displayName: "OSM Sync Scheduler Failures"
+documentation:
+  content: "Alert triggered when Cloud Scheduler fails to successfully execute the sync job."
+  mimeType: "text/markdown"
+enabled: true
+conditions:
+  - displayName: "Scheduler sync failed"
+    conditionMatchedLog:
+      filter: |
+        resource.type="cloud_run_revision"
+        resource.labels.service_name="osm-sync-api"
+        httpRequest.requestUrl=~"/api/sync"
+        httpRequest.userAgent="Google-Cloud-Scheduler"
+        httpRequest.status>=400
+      labelExtractors:
+        status_code: 'EXTRACT(httpRequest.status)'
+notificationChannels:
+  - projects/YOUR_PROJECT_ID/notificationChannels/CHANNEL_ID
+alertStrategy:
+  autoClose: 604800s
+  notificationRateLimit:
+    period: 300s
+combiner: OR
+```
+
+Deploy both alert policies:
 ```bash
 gcloud alpha monitoring policies create \
-  --policy-from-file=alert-policy.yaml \
+  --policy-from-file=alert-policy-errors.yaml \
+  --project=YOUR_PROJECT_ID
+
+gcloud alpha monitoring policies create \
+  --policy-from-file=alert-policy-scheduler.yaml \
   --project=YOUR_PROJECT_ID
 ```
+
+**Why two alerts?**
+- Application errors (500s, exceptions) generate ERROR-level logs
+- Scheduler failures (401, 415, 429) often generate WARNING-level logs
+- This ensures you're notified of ALL failure modes
 
 #### 3. Configure Email Group
 
