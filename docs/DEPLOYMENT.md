@@ -351,6 +351,40 @@ gcloud logging read \
 
 ## Troubleshooting
 
+### Wrong Application Deployed
+
+**Symptom:** After deployment, API service returns Streamlit HTML or vice versa
+
+**Cause:** `gcloud run deploy --source .` selected wrong Dockerfile in multi-service repository
+
+**Solution:** Use explicit image deployment method:
+
+```powershell
+# For API service
+Copy-Item deployment/Dockerfile.api ./Dockerfile -Force
+gcloud builds submit --tag gcr.io/PROJECT_ID/osm-sync-api:VERSION .
+gcloud run deploy osm-sync-api \
+  --image gcr.io/PROJECT_ID/osm-sync-api:VERSION \
+  --region=REGION \
+  --allow-unauthenticated
+git checkout Dockerfile
+
+# For UI service  
+Copy-Item deployment/Dockerfile.app ./Dockerfile -Force
+gcloud builds submit --tag gcr.io/PROJECT_ID/osm-sync:VERSION .
+gcloud run deploy osm-sync \
+  --image gcr.io/PROJECT_ID/osm-sync:VERSION \
+  --region=REGION \
+  --allow-unauthenticated
+git checkout Dockerfile
+```
+
+**Benefits:**
+- Ensures correct Dockerfile is used for each service
+- Provides explicit version tagging for rollback capability
+- Prevents deployment of wrong application to a service
+- Allows testing before switching traffic
+
 ### Authentication Issues
 - Ensure credentials file exists and is valid
 - Check service account has domain-wide delegation
