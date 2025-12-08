@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify
 import os
 import sys
 from typing import Dict, Any
+from datetime import datetime
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -234,6 +235,33 @@ def api_sync():
     """
     # Verify authorization
     if not verify_scheduler_token():
+        # Log to sync history if this is a scheduler request
+        user_agent = request.headers.get('User-Agent', '')
+        if 'Google-Cloud-Scheduler' in user_agent:
+            try:
+                sync_logger = get_logger()
+                sync_logger.log_sync(
+                    section_id='scheduler',
+                    section_name='Scheduled Sync',
+                    group_type='sync',
+                    group_email='scheduler@system',
+                    status=SyncStatus.ERROR,
+                    message="Scheduler request failed: Unauthorized (missing or invalid auth token)",
+                    details={
+                        'error': '401 Unauthorized',
+                        'remote_addr': request.remote_addr,
+                        'user_agent': user_agent,
+                        'has_auth_header': 'Authorization' in request.headers
+                    },
+                    members_added=0,
+                    members_removed=0,
+                    dry_run=False,
+                    triggered_by='scheduler',
+                    sync_run_id=f"scheduler-error-{datetime.utcnow().isoformat()}"
+                )
+            except Exception as log_error:
+                print(f"Failed to log 401 error to sync history: {log_error}")
+        
         return jsonify({
             "status": "error",
             "message": "Unauthorized - Invalid or missing auth token"
@@ -566,6 +594,95 @@ def method_not_allowed(error):
         "message": "Method not allowed for this endpoint",
         "allowed_methods": error.valid_methods if hasattr(error, 'valid_methods') else []
     }), 405
+
+
+@app.errorhandler(415)
+def unsupported_media_type(error):
+    """Handle unsupported media type errors - log to sync history if scheduler request."""
+    import logging
+    logger_std = logging.getLogger(__name__)
+    logger_std.error(f"415 Unsupported Media Type from {request.remote_addr}: {request.path}")
+    
+    # If this is a scheduler request to /api/sync, log to sync history
+    user_agent = request.headers.get('User-Agent', '')
+    is_scheduler = 'Google-Cloud-Scheduler' in user_agent
+    is_sync_endpoint = '/api/sync' in request.path
+    
+    if is_scheduler and is_sync_endpoint:
+        try:
+            sync_logger = get_logger()
+            content_type = request.headers.get('Content-Type', 'unknown')
+            sync_logger.log_sync(
+                section_id='scheduler',
+                section_name='Scheduled Sync',
+                group_type='sync',
+                group_email='scheduler@system',
+                status=SyncStatus.ERROR,
+                message=f"Scheduler request failed: Unsupported Media Type (Content-Type: {content_type})",
+                details={
+                    'error': '415 Unsupported Media Type',
+                    'content_type': content_type,
+                    'expected': 'application/json',
+                    'remote_addr': request.remote_addr,
+                    'user_agent': user_agent
+                },
+                members_added=0,
+                members_removed=0,
+                dry_run=False,
+                triggered_by='scheduler',
+                sync_run_id=f"scheduler-error-{datetime.utcnow().isoformat()}"
+            )
+        except Exception as log_error:
+            logger_std.error(f"Failed to log 415 error to sync history: {log_error}")
+    
+    return jsonify({
+        "status": "error",
+        "message": "Unsupported Media Type. Expected 'application/json'.",
+        "content_type_received": request.headers.get('Content-Type', 'none')
+    }), 415
+
+
+@app.errorhandler(401)
+def unauthorized(error):
+    """Handle unauthorized errors - log to sync history if scheduler request."""
+    import logging
+    logger_std = logging.getLogger(__name__)
+    logger_std.error(f"401 Unauthorized from {request.remote_addr}: {request.path}")
+    
+    # If this is a scheduler request to /api/sync, log to sync history
+    user_agent = request.headers.get('User-Agent', '')
+    is_scheduler = 'Google-Cloud-Scheduler' in user_agent
+    is_sync_endpoint = '/api/sync' in request.path
+    
+    if is_scheduler and is_sync_endpoint:
+        try:
+            sync_logger = get_logger()
+            sync_logger.log_sync(
+                section_id='scheduler',
+                section_name='Scheduled Sync',
+                group_type='sync',
+                group_email='scheduler@system',
+                status=SyncStatus.ERROR,
+                message="Scheduler request failed: Unauthorized (missing or invalid auth token)",
+                details={
+                    'error': '401 Unauthorized',
+                    'remote_addr': request.remote_addr,
+                    'user_agent': user_agent,
+                    'has_auth_header': 'Authorization' in request.headers
+                },
+                members_added=0,
+                members_removed=0,
+                dry_run=False,
+                triggered_by='scheduler',
+                sync_run_id=f"scheduler-error-{datetime.utcnow().isoformat()}"
+            )
+        except Exception as log_error:
+            logger_std.error(f"Failed to log 401 error to sync history: {log_error}")
+    
+    return jsonify({
+        "status": "error",
+        "message": "Unauthorized - Invalid or missing auth token"
+    }), 401
 
 
 @app.errorhandler(404)
