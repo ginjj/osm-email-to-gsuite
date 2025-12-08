@@ -7,6 +7,8 @@ from flask import Flask, request, jsonify
 import os
 import sys
 from typing import Dict, Any
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,6 +20,18 @@ from src.sync_logger import get_logger, SyncStatus
 from src.version import __version__
 
 app = Flask(__name__)
+
+# Configure request size limits (prevent large payload attacks)
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB max request size
+
+# Configure rate limiting to prevent DoS attacks
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",  # Use memory storage for simplicity
+    strategy="fixed-window"
+)
 
 # Load scheduler auth token from environment
 SCHEDULER_AUTH_TOKEN = os.getenv('SCHEDULER_AUTH_TOKEN')
@@ -466,6 +480,7 @@ def test_error():
 
 
 @app.route('/api/health', methods=['GET'])
+@limiter.exempt  # No rate limit on health checks for monitoring
 def health_check():
     """Health check endpoint for monitoring."""
     return jsonify({
@@ -476,6 +491,7 @@ def health_check():
 
 
 @app.route('/api/version', methods=['GET'])
+@limiter.exempt  # No rate limit on version endpoint
 def version_info():
     """Get API version information."""
     return jsonify({
@@ -485,6 +501,7 @@ def version_info():
 
 
 @app.route('/', methods=['GET'])
+@limiter.limit("10 per minute")  # Strict limit on root endpoint
 def root():
     """Root endpoint - show API info."""
     ui_url = os.environ.get('CLOUD_RUN_URL', 'https://sync.1stwarleyscouts.org.uk')
@@ -509,6 +526,64 @@ def root():
         </body>
     </html>
     """
+
+
+# Error handlers for better security
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    """Handle request too large errors."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Request too large from {request.remote_addr}: {request.content_length} bytes")
+    return jsonify({
+        "status": "error",
+        "message": "Request payload too large",
+        "max_size": "10MB"
+    }), 413
+
+
+@app.errorhandler(429)
+def ratelimit_handler(error):
+    """Handle rate limit exceeded errors."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Rate limit exceeded from {request.remote_addr}")
+    return jsonify({
+        "status": "error",
+        "message": "Rate limit exceeded. Please try again later.",
+        "retry_after": getattr(error, 'description', 'Unknown')
+    }), 429
+
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    """Handle method not allowed errors without processing large payloads."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Method not allowed from {request.remote_addr}: {request.method} {request.path}")
+    return jsonify({
+        "status": "error",
+        "message": "Method not allowed for this endpoint",
+        "allowed_methods": error.valid_methods if hasattr(error, 'valid_methods') else []
+    }), 405
+
+
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 errors - suppress detailed info for security."""
+    # Don't log common scanner paths to reduce noise
+    scanner_paths = ['.git', '.env', 'wp-', 'wordpress', 'admin', 'phpmyadmin']
+    is_scanner = any(path in request.path.lower() for path in scanner_paths)
+    
+    if not is_scanner:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"404 from {request.remote_addr}: {request.path}")
+    
+    return jsonify({
+        "status": "error",
+        "message": "Not found"
+    }), 404
 
 
 if __name__ == '__main__':
