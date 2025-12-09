@@ -49,6 +49,9 @@ scheduler_token.txt
 *~
 .DS_Store
 
+# Personal troubleshooting notes
+docs/TROUBLESHOOTING_SCHEDULER.md
+
 # Testing
 .pytest_cache/
 .coverage
