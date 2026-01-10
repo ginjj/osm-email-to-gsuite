@@ -204,8 +204,9 @@ class SyncLogger:
             client = storage.Client()
             bucket = client.bucket(self.bucket_name)
             
-            # List blobs in the logs directory
-            blobs = list(bucket.list_blobs(prefix=self.log_prefix, max_results=limit))
+            # List ALL blobs in the logs directory (no max_results to get all)
+            # then sort and limit to get the most recent ones
+            blobs = list(bucket.list_blobs(prefix=self.log_prefix))
             
             # Sort by name (timestamp is in filename) - newest first
             blobs.sort(key=lambda b: b.name, reverse=True)
